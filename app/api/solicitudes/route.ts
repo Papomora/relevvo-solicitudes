@@ -29,14 +29,14 @@ export async function POST(req: NextRequest) {
   if (role === 'admin') return NextResponse.json({ error: 'Admin no puede enviar solicitudes' }, { status: 403 })
 
   const body = await req.json()
-  const { tipo, urgencia, descripcion } = body
+  const { tipo, urgencia, descripcion, adjuntos } = body
   const cliente = session.user?.name ?? ''
 
   if (!tipo || !urgencia || !descripcion)
     return NextResponse.json({ error: 'Campos requeridos' }, { status: 400 })
 
   const nueva = await prisma.solicitud.create({
-    data: { cliente, tipo, urgencia, descripcion },
+    data: { cliente, tipo, urgencia, descripcion, adjuntos: adjuntos ?? [] },
   })
 
   return NextResponse.json(nueva, { status: 201 })

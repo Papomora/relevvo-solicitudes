@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { ESTADOS, CLIENTES, URGENCIAS } from '@/lib/constants'
 
+type Adjunto = { url: string; name: string }
 type Solicitud = {
   id: number; cliente: string; tipo: string; urgencia: string
   descripcion: string; estado: string; nota: string | null
-  createdAt: string; updatedAt: string
+  adjuntos: Adjunto[]; createdAt: string; updatedAt: string
 }
 
 // ── Design tokens ──────────────────────────────────────────────
@@ -566,6 +567,20 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <p style={{ fontSize:13, color:'rgba(229,226,225,0.5)', lineHeight:1.65 }}>{s.descripcion}</p>
+                        {s.adjuntos?.length > 0 && !isEditing && (
+                          <div style={{ marginTop:12, display:'flex', flexWrap:'wrap', gap:6 }}>
+                            {s.adjuntos.map((a, i) => (
+                              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{
+                                display:'inline-flex', alignItems:'center', gap:6,
+                                fontSize:11, padding:'4px 10px', borderRadius:8,
+                                background:'rgba(124,58,237,0.12)', color:T.primary,
+                                textDecoration:'none', fontWeight:500,
+                              }}>
+                                <Icon name="attach_file" size={13}/>{a.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         {s.nota && !isEditing && (
                           <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${T.border}` }}>
                             <p style={{ fontSize:11, color:T.primary, fontWeight:700, marginBottom:4, textTransform:'uppercase', letterSpacing:'.08em' }}>Nota interna</p>

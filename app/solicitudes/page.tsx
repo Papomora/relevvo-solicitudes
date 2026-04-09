@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { signOut } from 'next-auth/react'
 import { TIPOS, URGENCIAS, ESTADOS } from '@/lib/constants'
+
+type Adjunto = { id: string; file: File; uploading: boolean; url?: string; error?: string }
 
 type Solicitud = {
   id: number
@@ -12,6 +14,7 @@ type Solicitud = {
   descripcion: string
   estado: string
   nota: string | null
+  adjuntos: { url: string; name: string }[]
   createdAt: string
 }
 
@@ -72,6 +75,9 @@ export default function SolicitudesPage() {
   const [success, setSuccess]         = useState(false)
   const [error, setError]             = useState('')
   const [lastPoll, setLastPoll]       = useState(new Date().toISOString())
+  const [adjuntos, setAdjuntos]       = useState<Adjunto[]>([])
+  const [dragOver, setDragOver]       = useState(false)
+  const fileInputRef                  = useRef<HTMLInputElement>(null)
 
   const fetchSolicitudes = useCallback(async () => {
     const res = await fetch('/api/solicitudes')
@@ -91,19 +97,53 @@ export default function SolicitudesPage() {
     return () => clearInterval(interval)
   }, [lastPoll, fetchSolicitudes])
 
+  async function uploadFile(id: string, file: File) {
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      setAdjuntos(prev => prev.map(a => a.id === id
+        ? { ...a, uploading: false, url: data.url, error: data.error }
+        : a
+      ))
+    } catch {
+      setAdjuntos(prev => prev.map(a => a.id === id
+        ? { ...a, uploading: false, error: 'Error al subir' } : a
+      ))
+    }
+  }
+
+  function handleFiles(fileList: FileList | null) {
+    if (!fileList) return
+    const slots = 5 - adjuntos.length
+    if (slots <= 0) return
+    const newItems: Adjunto[] = Array.from(fileList).slice(0, slots).map(file => ({
+      id: Math.random().toString(36).slice(2),
+      file, uploading: true,
+    }))
+    setAdjuntos(prev => [...prev, ...newItems])
+    newItems.forEach(a => uploadFile(a.id, a.file))
+  }
+
+  function removeAdjunto(id: string) {
+    setAdjuntos(prev => prev.filter(a => a.id !== id))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (!tipo || !urgencia || !descripcion.trim()) { setError('Completa todos los campos.'); return }
     setSending(true)
+    const adjuntosPayload = adjuntos.filter(a => a.url).map(a => ({ url: a.url!, name: a.file.name }))
     const res = await fetch('/api/solicitudes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipo, urgencia, descripcion }),
+      body: JSON.stringify({ tipo, urgencia, descripcion, adjuntos: adjuntosPayload }),
     })
     setSending(false)
     if (res.ok) {
-      setSuccess(true); setTipo(''); setUrgencia(''); setDescripcion('')
+      setSuccess(true); setTipo(''); setUrgencia(''); setDescripcion(''); setAdjuntos([])
       fetchSolicitudes(); setTimeout(() => setSuccess(false), 4000)
     } else {
       setError('Error al enviar. Intenta de nuevo.')
@@ -261,26 +301,68 @@ export default function SolicitudesPage() {
                   />
                 </div>
 
-                {/* Upload zone (decorative) */}
+                {/* Upload zone */}
                 <div>
-                  <label style={{ fontSize:11, fontWeight:600, color:T.muted, textTransform:'uppercase', letterSpacing:'.15em', display:'block', marginBottom:10 }}>Assets & Referencias</label>
-                  <div style={{
-                    border:'2px dashed rgba(255,255,255,0.07)', borderRadius:16,
-                    padding:'48px 24px', display:'flex', flexDirection:'column',
-                    alignItems:'center', gap:14, background:'rgba(28,27,27,0.4)',
-                    cursor:'pointer', transition:'background .2s',
-                  }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(42,42,42,0.5)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(28,27,27,0.4)'}
+                  <label style={{ fontSize:11, fontWeight:600, color:T.muted, textTransform:'uppercase', letterSpacing:'.15em', display:'block', marginBottom:10 }}>
+                    Assets & Referencias
+                    <span style={{ marginLeft:8, fontWeight:400, textTransform:'none', letterSpacing:0, color:'#374151' }}>PNG, JPG, PDF · máx. 10 MB · expiran en 48 h</span>
+                  </label>
+
+                  {/* Drop zone */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
+                    style={{
+                      border: `2px dashed ${dragOver ? T.primaryC : 'rgba(255,255,255,0.07)'}`,
+                      borderRadius:16, padding:'36px 24px',
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:12,
+                      background: dragOver ? 'rgba(124,58,237,0.08)' : 'rgba(28,27,27,0.4)',
+                      cursor:'pointer', transition:'all .2s',
+                    }}
                   >
-                    <div style={{ width:56, height:56, borderRadius:'50%', background:'rgba(124,58,237,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:T.primary }}>
-                      <Icon name="cloud_upload" size={28}/>
+                    <div style={{ width:52, height:52, borderRadius:'50%', background:'rgba(124,58,237,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:T.primary }}>
+                      <Icon name="cloud_upload" size={26}/>
                     </div>
                     <div style={{ textAlign:'center' }}>
-                      <p style={{ fontSize:13, fontWeight:500, color:T.onSurf, marginBottom:4 }}>Haz clic para subir o arrastra archivos</p>
-                      <p style={{ fontSize:12, color:T.muted }}>PNG, JPG, PDF o MP4 (Máx. 500MB)</p>
+                      <p style={{ fontSize:13, fontWeight:500, color:T.onSurf, marginBottom:3 }}>Haz clic o arrastra archivos aquí</p>
+                      <p style={{ fontSize:12, color:T.muted }}>Hasta 5 archivos · máx. 10 MB cada uno</p>
                     </div>
                   </div>
+
+                  {/* Hidden input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file" multiple
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,application/pdf"
+                    style={{ display:'none' }}
+                    onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
+                  />
+
+                  {/* File list */}
+                  {adjuntos.length > 0 && (
+                    <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:6 }}>
+                      {adjuntos.map(a => (
+                        <div key={a.id} style={{
+                          display:'flex', alignItems:'center', gap:10,
+                          padding:'8px 14px', borderRadius:10,
+                          background: a.error ? 'rgba(255,176,205,0.08)' : a.uploading ? 'rgba(124,58,237,0.08)' : 'rgba(65,229,117,0.07)',
+                        }}>
+                          <Icon name={a.error ? 'error' : a.uploading ? 'hourglass_top' : 'check_circle'} filled size={16}
+                            style={{ color: a.error ? T.tertiary : a.uploading ? T.primary : T.secondary } as any}/>
+                          <span style={{ flex:1, fontSize:12, color:T.onSurf, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {a.file.name}
+                          </span>
+                          {a.error && <span style={{ fontSize:11, color:T.tertiary }}>{a.error}</span>}
+                          {a.uploading && <span style={{ fontSize:11, color:T.muted }}>Subiendo…</span>}
+                          {!a.uploading && <button onClick={() => removeAdjunto(a.id)} style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex', padding:2 }}>
+                            <Icon name="close" size={14}/>
+                          </button>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Feedback */}
@@ -390,6 +472,20 @@ export default function SolicitudesPage() {
                           <p style={{ fontSize:12, color:T.muted, lineHeight:1.55, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' as any }}>{s.descripcion}</p>
                         </div>
 
+                        {s.adjuntos?.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                            {s.adjuntos.map((a, i) => (
+                              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{
+                                display:'inline-flex', alignItems:'center', gap:5,
+                                fontSize:11, padding:'3px 9px', borderRadius:7,
+                                background:'rgba(124,58,237,0.12)', color:T.primary,
+                                textDecoration:'none', fontWeight:500,
+                              }}>
+                                <Icon name="attach_file" size={12}/>{a.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         {s.nota && (
                           <div style={{ paddingTop:12, borderTop:`1px solid ${T.border}` }}>
                             <p style={{ fontSize:11, color:T.primary, fontWeight:700, marginBottom:4, textTransform:'uppercase', letterSpacing:'.08em' }}>Nota de Relevvo</p>

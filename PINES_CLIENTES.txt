@@ -15,7 +15,7 @@ Visuality        6143
 ───────────────────────
 ADMIN
 URL:      /admin/login
-Usuario:  admin@relevvostudio.com
+Usuario:  juancamiloleonmora@gmail.com
 Password: Relevvo2026$!
 ═══════════════════════════════════════════
 

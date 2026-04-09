@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preview — Panel Admin Relevvo</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:#06000F;color:#fff;display:flex;min-height:100vh;overflow:hidden}
+  /* Sidebar */
+  aside{width:224px;flex-shrink:0;display:flex;flex-direction:column;padding:32px 20px;border-right:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)}
+  .sidebar-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,0.25);margin-bottom:10px}
+  .logo{height:32px;margin-bottom:40px;opacity:.9;filter:brightness(10)}
+  nav{display:flex;flex-direction:column;gap:4px;flex:1}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;font-size:13px;cursor:pointer;transition:.2s;border-left:2px solid transparent;color:rgba(255,255,255,0.4)}
+  .nav-item.active{background:rgba(94,0,168,0.3);color:#c084fc;border-left-color:#E91E8C}
+  .nav-item:hover:not(.active){background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.7)}
+  .nav-icon{font-size:15px}
+  .sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+  .btn-notif{width:100%;text-align:left;font-size:11px;padding:8px 12px;border-radius:10px;background:rgba(94,0,168,0.15);color:#a78bfa;border:none;cursor:pointer}
+  .btn-logout{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border-radius:12px;color:rgba(255,255,255,0.3);background:none;border:none;cursor:pointer}
+  /* Main */
+  main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  /* Header */
+  header{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid rgba(255,255,255,0.06)}
+  .header-title{font-size:18px;font-weight:600}
+  .header-date{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px}
+  .header-right{display:flex;align-items:center;gap:12px}
+  .badge-new{font-size:11px;padding:6px 12px;border-radius:20px;background:rgba(233,30,140,0.15);color:#E91E8C;border:1px solid rgba(233,30,140,0.3)}
+  .user-chip{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:12px;background:rgba(255,255,255,0.05)}
+  .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#5E00A8,#E91E8C);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+  .user-name{font-size:11px;color:rgba(255,255,255,0.6)}
+  /* Content */
+  .content{flex:1;padding:28px 32px;overflow-y:auto}
+  /* Stat cards */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+  .stat-card{border-radius:16px;padding:18px 20px}
+  .stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px;opacity:.5}
+  .stat-value{font-size:32px;font-weight:700}
+  /* Section title */
+  .section-title{font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,0.35);margin-bottom:16px}
+  /* Filters */
+  .filters{display:flex;gap:10px;margin-bottom:20px;align-items:center}
+  select,input[type=date]{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:10px;font-size:13px;outline:none}
+  .filter-count{font-size:12px;color:rgba(255,255,255,0.3);margin-left:auto}
+  /* Solicitud cards */
+  .sol-card{border-radius:16px;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);margin-bottom:10px}
+  .sol-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+  .sol-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tag-cliente{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;background:rgba(94,0,168,0.25);color:#c084fc;border:1px solid rgba(94,0,168,0.4)}
+  .tag-tipo{font-size:13px;font-weight:500;color:#fff}
+  .tag-urgencia{font-size:11px;color:rgba(255,255,255,0.3)}
+  .tag-fecha{font-size:11px;color:rgba(255,255,255,0.2)}
+  .sol-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .badge-estado{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:500}
+  .btn-edit{font-size:11px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);border:none;cursor:pointer}
+  .sol-desc{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.6}
+  /* Metrics */
+  .metric-bar-card{border-radius:16px;padding:18px 20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px}
+  .metric-bar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .metric-bar-name{font-size:13px;font-weight:500}
+  .metric-bar-info{font-size:11px;color:rgba(255,255,255,0.35)}
+  .bar-track{height:6px;border-radius:99px;background:rgba(255,255,255,0.06)}
+  .bar-fill{height:6px;border-radius:99px;background:linear-gradient(90deg,#5E00A8,#E91E8C)}
+  .time-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+  .time-card{border-radius:16px;text-align:center;padding:20px;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.15)}
+  .time-value{font-size:24px;font-weight:700;color:#a78bfa}
+  .time-label{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside>
+  <p class="sidebar-label">Panel</p>
+  <img src="https://i.imgur.com/placeholder.png" alt="Relevvo" class="logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+  <div style="display:none;font-size:18px;font-weight:700;font-style:italic;margin-bottom:40px;letter-spacing:-.5px">relevvo<span style="color:#E91E8C">.</span></div>
+
+  <p class="sidebar-label">Menú</p>
+  <nav>
+    <div class="nav-item active"><span class="nav-icon">◈</span> Solicitudes</div>
+    <div class="nav-item"><span class="nav-icon">◎</span> Métricas</div>
+    <div class="nav-item"><span class="nav-icon">↓</span> Exportar PDF</div>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <button class="btn-notif">🔔 Activar alertas</button>
+    <button class="btn-logout">⎋ Salir</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main>
+  <!-- Header -->
+  <header>
+    <div>
+      <div class="header-title">Solicitudes</div>
+      <div class="header-date">miércoles, 9 de abril de 2026</div>
+    </div>
+    <div class="header-right">
+      <div class="badge-new">2 nuevas ✦</div>
+      <div class="user-chip">
+        <div class="avatar">R</div>
+        <span class="user-name">Relevvo Studio</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Stat cards -->
+    <div class="stats-grid">
+      <div class="stat-card" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.15)">
+        <div class="stat-label">Total</div>
+        <div class="stat-value" style="color:#a78bfa">7</div>
+      </div>
+      <div class="stat-card" style="background:rgba(233,30,140,0.1);border:1px solid rgba(233,30,140,0.15)">
+        <div class="stat-label">Pendientes</div>
+        <div class="stat-value" style="color:#E91E8C">3</div>
+      </div>
+      <div class="stat-card" style="background:rgba(123,0,212,0.1);border:1px solid rgba(123,0,212,0.15)">
+        <div class="stat-label">En proceso</div>
+        <div class="stat-value" style="color:#7B00D4">2</div>
+      </div>
+      <div class="stat-card" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.15)">
+        <div class="stat-label">Completadas</div>
+        <div class="stat-value" style="color:#34d399">2</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <select><option>Todos los clientes</option><option>ARü</option><option>Crusso</option></select>
+      <select><option>Todos los estados</option><option>Pendiente</option><option>En proceso</option></select>
+      <span class="filter-count">7 solicitudes</span>
+    </div>
+
+    <!-- Cards -->
+    <div class="sol-card">
+      <div class="sol-top">
+        <div class="sol-tags">
+          <span class="tag-cliente">ARü</span>
+          <span class="tag-tipo">Diseño</span>
+          <span class="tag-urgencia">🔴 Alta</span>
+          <span class="tag-fecha">09 abr. 2026, 10:24</span>
+        </div>
+        <div class="sol-right">
+          <span class="badge-estado" style="background:rgba(233,30,140,0.18);color:#E91E8C;border:1px solid rgba(233,30,140,0.35)">Pendiente</span>
+          <button class="btn-edit">Editar</button>
+        </div>
+      </div>
+      <p class="sol-desc">Necesitamos actualizar el catálogo de productos con las nuevas referencias de temporada. Son aproximadamente 24 piezas nuevas con fotografías ya listas.</p>
+    </div>
+
+    <div class="sol-card">
+      <div class="sol-top">
+        <div class="sol-tags">
+          <span class="tag-cliente">Crusso</span>
+          <span class="tag-tipo">Contenido nuevo</span>
+          <span class="tag-urgencia">🟡 Media</span>
+          <span class="tag-fecha">08 abr. 2026, 15:10</span>
+        </div>
+        <div class="sol-right">
+          <span class="badge-estado" style="background:rgba(123,0,212,0.18);color:#9B59F5;border:1px solid rgba(123,0,212,0.35)">En proceso</span>
+          <button class="btn-edit">Editar</button>
+        </div>
+      </div>
+      <p class="sol-desc">Pack de 4 posts para lanzamiento de la nueva colección de sillas de oficina premium. Incluir storytelling de diseño y fabricación artesanal colombiana.</p>
+    </div>
+
+    <div class="sol-card">
+      <div class="sol-top">
+        <div class="sol-tags">
+          <span class="tag-cliente">Molicie</span>
+          <span class="tag-tipo">Reunión / llamada</span>
+          <span class="tag-urgencia">🟢 Baja</span>
+          <span class="tag-fecha">07 abr. 2026, 09:00</span>
+        </div>
+        <div class="sol-right">
+          <span class="badge-estado" style="background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3)">Completada</span>
+          <button class="btn-edit">Editar</button>
+        </div>
+      </div>
+      <p class="sol-desc">Revisión mensual de métricas y planificación del calendario de contenidos para mayo 2026.</p>
+    </div>
+
+  </div>
+</main>
+
+</body>
+</html>
