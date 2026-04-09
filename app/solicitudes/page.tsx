@@ -83,10 +83,8 @@ export default function SolicitudesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-10">
         <div>
-          <p className="text-white/30 text-xs tracking-widest uppercase">Portal</p>
-          <h1 className="font-display italic text-3xl text-white font-bold">
-            {session?.user?.name}<span className="text-magenta">.</span>
-          </h1>
+          <p className="text-white/30 text-xs tracking-widest uppercase mb-1">Portal</p>
+          <img src="/logo.png" alt="Relevvo Studio" className="h-9 object-contain" />
         </div>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
