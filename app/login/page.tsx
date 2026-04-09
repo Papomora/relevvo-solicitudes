@@ -65,12 +65,12 @@ export default function LoginPage() {
           <Image
             src="/logo.png"
             alt="Relevvo Studio"
-            width={180}
-            height={60}
+            width={200}
+            height={66}
             className="object-contain"
             priority
           />
-          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-3">Portal de clientes</p>
+          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-4">Portal de clientes</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-7">
