@@ -23,6 +23,11 @@ export default auth((req) => {
     return NextResponse.next()
   }
 
+  // Admin cannot access client routes — redirect to admin panel
+  if (role === 'admin') {
+    return NextResponse.redirect(new URL('/admin', req.url))
+  }
+
   // Client routes — require any session
   if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
