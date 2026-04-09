@@ -4,5 +4,5 @@ import { authConfig } from './auth.config'
 export default NextAuth(authConfig).auth
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.png|logo.png).*)'],
+  matcher: ['/((?!_next/static|_next/image|.*\\.png$|.*\\.ico$|.*\\.svg$|.*\\.jpg$|.*\\.webp$).*)'],
 }

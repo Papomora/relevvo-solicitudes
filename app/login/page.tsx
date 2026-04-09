@@ -3,7 +3,6 @@
 import { useState, useRef } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { CLIENTES } from '@/lib/constants'
 
 export default function LoginPage() {
@@ -62,14 +61,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <Image
-            src="/logo.png"
-            alt="Relevvo Studio"
-            width={200}
-            height={66}
-            className="object-contain"
-            priority
-          />
+          <img src="/logo.png" alt="Relevvo Studio" className="h-14 object-contain" />
           <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-4">Portal de clientes</p>
         </div>
 
