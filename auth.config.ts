@@ -24,17 +24,19 @@ export const authConfig: NextAuthConfig = {
       const session = auth
       const role    = (session?.user as any)?.role
       const path    = nextUrl.pathname
+      const isApi   = path.startsWith('/api/')
 
-      // Always allow public routes
+      // Always allow public routes and all API calls
+      // (API routes do their own auth check via auth())
       if (
+        isApi ||
         path.startsWith('/login') ||
-        path.startsWith('/admin/login') ||
-        path.startsWith('/api/auth')
+        path.startsWith('/admin/login')
       ) {
         return true
       }
 
-      // Admin routes — require admin role
+      // Admin pages — require admin role
       if (path.startsWith('/admin')) {
         if (role !== 'admin') {
           return NextResponse.redirect(new URL('/admin/login', nextUrl))
@@ -42,12 +44,12 @@ export const authConfig: NextAuthConfig = {
         return true
       }
 
-      // Block admin from client routes
+      // Redirect admin away from client pages
       if (role === 'admin') {
         return NextResponse.redirect(new URL('/admin', nextUrl))
       }
 
-      // All other routes — require session
+      // All other pages — require session
       if (!session) {
         return NextResponse.redirect(new URL('/login', nextUrl))
       }
