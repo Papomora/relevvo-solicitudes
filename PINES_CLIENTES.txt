@@ -1,0 +1,25 @@
+═══════════════════════════════════════════
+   PORTAL RELEVVO — PINES DE ACCESO
+   solicitudes.relevvostudio.com
+═══════════════════════════════════════════
+
+CLIENTE          PIN
+───────────────────────
+ARü              7294
+Crusso           5831
+Groi             4617
+Molicie          9382
+Versla           2758
+Visuality        6143
+
+───────────────────────
+ADMIN
+URL:      /admin/login
+Usuario:  admin@relevvostudio.com
+Password: Relevvo2026$!
+═══════════════════════════════════════════
+
+Para cambiar un PIN: editar este archivo y
+actualizar la variable correspondiente en
+Vercel → Settings → Environment Variables
+═══════════════════════════════════════════
