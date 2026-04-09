@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [saving, setSaving]               = useState(false)
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
+  const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default')
 
   const fetchAll = useCallback(async () => {
     const res = await fetch('/api/solicitudes')
@@ -33,6 +34,16 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // Request browser notification permission
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPerm(Notification.permission)
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(p => setNotifPerm(p))
+      }
+    }
+  }, [])
 
   // Poll every 15s
   useEffect(() => {
@@ -44,6 +55,13 @@ export default function AdminPage() {
           setNuevas(n => n + count)
           fetchAll()
           setLastPoll(new Date().toISOString())
+          // Browser notification
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('Nueva solicitud — Relevvo Studio', {
+              body: `${count} nueva${count > 1 ? 's' : ''} solicitud${count > 1 ? 'es' : ''} recibida${count > 1 ? 's' : ''}.`,
+              icon: '/icon.png',
+            })
+          }
         }
       }
     }, 15000)
@@ -92,6 +110,15 @@ export default function AdminPage() {
           <img src="/logo.png" alt="Relevvo Studio" className="h-10 object-contain" />
         </div>
         <div className="flex items-center gap-4">
+          {notifPerm !== 'granted' && (
+            <button
+              onClick={() => Notification.requestPermission().then(p => setNotifPerm(p))}
+              className="text-xs px-3 py-1 rounded-full"
+              style={{ background: 'rgba(94,0,168,0.2)', color: '#a78bfa', border: '1px solid rgba(94,0,168,0.4)' }}
+            >
+              🔔 Activar alertas
+            </button>
+          )}
           {nuevas > 0 && (
             <button
               onClick={() => setNuevas(0)}
