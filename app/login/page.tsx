@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { CLIENTES } from '@/lib/constants'
 
 export default function LoginPage() {
@@ -60,11 +61,16 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="text-center mb-10">
-          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mb-2">Portal de</p>
-          <h1 className="font-display italic text-4xl text-white font-bold leading-none">
-            Relevvo<span className="text-magenta">.</span>
-          </h1>
+        <div className="flex flex-col items-center mb-10">
+          <Image
+            src="/logo.png"
+            alt="Relevvo Studio"
+            width={180}
+            height={60}
+            className="object-contain"
+            priority
+          />
+          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-3">Portal de clientes</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-7">

@@ -88,10 +88,8 @@ export default function AdminPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-white/30 text-xs tracking-widest uppercase">Panel</p>
-          <h1 className="font-display italic text-3xl text-white font-bold">
-            Relevvo Studio<span className="text-magenta">.</span>
-          </h1>
+          <p className="text-white/30 text-xs tracking-widest uppercase mb-1">Panel</p>
+          <img src="/logo.png" alt="Relevvo Studio" className="h-8 object-contain" />
         </div>
         <div className="flex items-center gap-4">
           {nuevas > 0 && (

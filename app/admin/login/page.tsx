@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -33,12 +34,16 @@ export default function AdminLoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-10">
-          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mb-2">Acceso</p>
-          <h1 className="font-display italic text-4xl text-white font-bold leading-none">
-            Admin<span className="text-magenta">.</span>
-          </h1>
-          <p className="text-white/30 text-sm mt-2">Solo equipo Relevvo</p>
+        <div className="flex flex-col items-center mb-10">
+          <Image
+            src="/logo.png"
+            alt="Relevvo Studio"
+            width={180}
+            height={60}
+            className="object-contain"
+            priority
+          />
+          <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-3">Panel de administración</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-5">
