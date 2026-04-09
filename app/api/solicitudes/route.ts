@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+  const role = (session.user as any)?.role
+  if (role === 'admin') return NextResponse.json({ error: 'Admin no puede enviar solicitudes' }, { status: 403 })
+
   const body = await req.json()
   const { tipo, urgencia, descripcion } = body
   const cliente = session.user?.name ?? ''
