@@ -10,44 +10,32 @@ type Solicitud = {
   createdAt: string; updatedAt: string
 }
 
-// ── SVG Line Chart ─────────────────────────────────────────────
-function LineChart({ data }: { data: { label: string; count: number }[] }) {
-  const W = 100, H = 60, pad = 6
-  const max = Math.max(...data.map(d => d.count), 1)
-  const pts = data.map((d, i) => ({
-    x: pad + (i / (data.length - 1)) * (W - pad * 2),
-    y: H - pad - (d.count / max) * (H - pad * 2),
-    ...d,
-  }))
-  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-  const area = `${path} L${pts[pts.length-1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E91E8C" stopOpacity="0.35"/>
-          <stop offset="100%" stopColor="#E91E8C" stopOpacity="0"/>
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#chartGrad)"/>
-      <path d={path} fill="none" stroke="#E91E8C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      {pts.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="2" fill="#E91E8C"/>
-      ))}
-    </svg>
-  )
+// ── Design tokens ──────────────────────────────────────────────
+const T = {
+  bg:       '#131313',
+  sidebar:  '#1C1B1B',
+  card:     'rgba(42,42,42,0.6)',
+  cardHigh: '#2A2A2A',
+  primary:  '#D2BBFF',
+  primaryC: '#7C3AED',
+  secondary:'#41E575',
+  tertiary: '#FFB0CD',
+  surface:  '#201F1F',
+  onSurf:   '#E5E2E1',
+  muted:    '#6B7280',
+  border:   'rgba(255,255,255,0.05)',
+  borderMd: 'rgba(255,255,255,0.08)',
 }
 
-// ── Glass card ─────────────────────────────────────────────────
-function GlassCard({ children, className = '', style = {} }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+// ── Glass panel ────────────────────────────────────────────────
+function Glass({ children, style = {}, onClick }: { children: React.ReactNode; style?: React.CSSProperties; onClick?: () => void }) {
   return (
-    <div className={className} style={{
-      background: 'rgba(255,255,255,0.04)',
-      backdropFilter: 'blur(24px)',
-      WebkitBackdropFilter: 'blur(24px)',
-      border: '1px solid rgba(255,255,255,0.09)',
-      borderRadius: '20px',
+    <div onClick={onClick} style={{
+      background: T.card,
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      border: `1px solid ${T.border}`,
+      borderRadius: 16,
       ...style,
     }}>
       {children}
@@ -55,21 +43,81 @@ function GlassCard({ children, className = '', style = {} }: { children: React.R
   )
 }
 
+// ── Icon (Material Symbols) ────────────────────────────────────
+function Icon({ name, filled = false, size = 20 }: { name: string; filled?: boolean; size?: number }) {
+  return (
+    <span className="material-symbols-outlined" style={{
+      fontSize: size,
+      fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24`,
+      lineHeight: 1,
+      userSelect: 'none',
+    }}>{name}</span>
+  )
+}
+
+// ── Bar chart ──────────────────────────────────────────────────
+function BarChart({ data }: { data: { label: string; count: number }[] }) {
+  const max = Math.max(...data.map(d => d.count), 1)
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:'100%', width:'100%' }}>
+      {data.map((d, i) => {
+        const pct = (d.count / max) * 100
+        return (
+          <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', height:'100%', cursor:'default' }}>
+            <div
+              title={`${d.count} solicitud${d.count !== 1 ? 'es' : ''}`}
+              style={{
+                width:'100%',
+                height: pct < 4 && d.count > 0 ? '4%' : `${pct}%`,
+                minHeight: d.count > 0 ? 6 : 2,
+                background: 'linear-gradient(to top, rgba(255,176,205,0.12), rgba(255,176,205,0.4))',
+                borderRadius: '4px 4px 0 0',
+                transition: 'height .4s ease',
+              }}
+            />
+            <span style={{ fontSize:9, color:'#4B5563', textAlign:'center', marginTop:6, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em' }}>
+              {d.label.slice(0, 3)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Status badge ───────────────────────────────────────────────
+function StatusBadge({ estado }: { estado: string }) {
+  const info = ESTADOS.find(s => s.value === estado) ?? ESTADOS[0]
+  const c = info.color
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:5,
+      padding:'3px 10px', borderRadius:999,
+      fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'.08em',
+      background:`${c}15`, color:c, border:`1px solid ${c}30`,
+    }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background:c, display:'inline-block' }}/>
+      {info.label}
+    </span>
+  )
+}
+
 export default function AdminPage() {
-  const [solicitudes, setSolicitudes]   = useState<Solicitud[]>([])
+  const [solicitudes, setSolicitudes]     = useState<Solicitud[]>([])
   const [filtroCliente, setFiltroCliente] = useState('todos')
   const [filtroEstado, setFiltroEstado]   = useState('todos')
-  const [editId, setEditId]             = useState<number | null>(null)
-  const [editEstado, setEditEstado]     = useState('')
-  const [editNota, setEditNota]         = useState('')
-  const [saving, setSaving]             = useState(false)
-  const [lastPoll, setLastPoll]         = useState(new Date().toISOString())
-  const [nuevas, setNuevas]             = useState(0)
-  const [notifPerm, setNotifPerm]       = useState<NotificationPermission>('default')
-  const [activeNav, setActiveNav]       = useState<'dash'|'lista'|'metricas'|'pdf'>('dash')
-  const [pdfDesde, setPdfDesde]         = useState('')
-  const [pdfHasta, setPdfHasta]         = useState('')
-  const [pdfCliente, setPdfCliente]     = useState('todos')
+  const [editId, setEditId]               = useState<number | null>(null)
+  const [editEstado, setEditEstado]       = useState('')
+  const [editNota, setEditNota]           = useState('')
+  const [saving, setSaving]               = useState(false)
+  const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
+  const [nuevas, setNuevas]               = useState(0)
+  const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default')
+  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'>('dash')
+  const [pdfDesde, setPdfDesde]           = useState('')
+  const [pdfHasta, setPdfHasta]           = useState('')
+  const [pdfCliente, setPdfCliente]       = useState('todos')
+  const [search, setSearch]               = useState('')
 
   const fetchAll = useCallback(async () => {
     const res = await fetch('/api/solicitudes')
@@ -101,13 +149,11 @@ export default function AdminPage() {
   function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? '') }
   async function saveEdit() {
     if (!editId) return; setSaving(true)
-    const res = await fetch(`/api/solicitudes/${editId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({estado:editEstado,nota:editNota}) })
+    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota}) })
     setSaving(false); setEditId(null); if (res.ok) fetchAll()
   }
 
-  const estadoInfo = (e: string) => ESTADOS.find(s => s.value === e) ?? ESTADOS[0]
-
-  // ── Métricas ──────────────────────────────────────────────────
+  // ── Derived data ───────────────────────────────────────────
   const counts = useMemo(() => ESTADOS.reduce((acc, e) => { acc[e.value] = solicitudes.filter(s => s.estado === e.value).length; return acc }, {} as Record<string,number>), [solicitudes])
 
   const chartData = useMemo(() => Array.from({length:7}, (_,i) => {
@@ -117,7 +163,7 @@ export default function AdminPage() {
   }), [solicitudes])
 
   const topClientes = useMemo(() =>
-    CLIENTES.map(c => ({ cliente: c, total: solicitudes.filter(s=>s.cliente===c).length }))
+    CLIENTES.map(c => ({ cliente:c, total:solicitudes.filter(s=>s.cliente===c).length }))
       .filter(m=>m.total>0).sort((a,b)=>b.total-a.total).slice(0,5)
   , [solicitudes])
 
@@ -131,10 +177,12 @@ export default function AdminPage() {
   , [solicitudes])
 
   const filtered = useMemo(() => solicitudes.filter(s =>
-    (filtroCliente==='todos'||s.cliente===filtroCliente) && (filtroEstado==='todos'||s.estado===filtroEstado)
-  ), [solicitudes, filtroCliente, filtroEstado])
+    (filtroCliente==='todos'||s.cliente===filtroCliente) &&
+    (filtroEstado==='todos'||s.estado===filtroEstado) &&
+    (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
+  ), [solicitudes, filtroCliente, filtroEstado, search])
 
-  // ── PDF ───────────────────────────────────────────────────────
+  // ── PDF ────────────────────────────────────────────────────
   function generarPDF() {
     const desde = pdfDesde ? new Date(pdfDesde) : null
     const hasta = pdfHasta ? new Date(pdfHasta+'T23:59:59') : null
@@ -143,269 +191,499 @@ export default function AdminPage() {
       if (desde && f<desde) return false; if (hasta && f>hasta) return false
       if (pdfCliente!=='todos' && s.cliente!==pdfCliente) return false; return true
     })
-    const rows  = data.map(s => {
-      const est  = ESTADOS.find(e=>e.value===s.estado)?.label??s.estado
-      const urg  = URGENCIAS.find(u=>u.value===s.urgencia)?.label??s.urgencia
+    const rows = data.map(s => {
+      const est   = ESTADOS.find(e=>e.value===s.estado)?.label ?? s.estado
+      const urg   = URGENCIAS.find(u=>u.value===s.urgencia)?.label ?? s.urgencia
       const fecha = new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})
       return `<tr><td>${fecha}</td><td>${s.cliente}</td><td>${s.tipo}</td><td>${urg.replace(/[🟢🟡🔴]/g,'').trim()}</td><td>${est}</td><td style="max-width:260px">${s.descripcion}</td><td>${s.nota??'—'}</td></tr>`
     }).join('')
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Relevvo</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:24px}h1{font-size:17px;margin-bottom:4px}p{color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse}th{background:#5E00A8;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}tr:nth-child(even) td{background:#f9f7ff}</style></head><body><h1>Solicitudes — Relevvo Studio</h1><p>Cliente: <strong>${pdfCliente==='todos'?'Todos':pdfCliente}</strong> | Total: <strong>${data.length}</strong></p><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Urgencia</th><th>Estado</th><th>Descripción</th><th>Nota</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>`
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Relevvo</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:24px}h1{font-size:17px;margin-bottom:4px}p{color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse}th{background:#7C3AED;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}tr:nth-child(even) td{background:#f5f0ff}</style></head><body><h1>Solicitudes — Relevvo Studio</h1><p>Cliente: <strong>${pdfCliente==='todos'?'Todos':pdfCliente}</strong> | Total: <strong>${data.length}</strong></p><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Urgencia</th><th>Estado</th><th>Descripción</th><th>Nota</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>`
     const win = window.open('','_blank'); win?.document.write(html); win?.document.close()
   }
 
+  // ── Stat card data ─────────────────────────────────────────
   const STATS = [
-    { label:'Total',       value:solicitudes.length,       color:'#c084fc', bg:'rgba(192,132,252,0.12)' },
-    { label:'Pendientes',  value:counts['pendiente']??0,   color:'#E91E8C', bg:'rgba(233,30,140,0.12)' },
-    { label:'En proceso',  value:counts['en_proceso']??0,  color:'#818cf8', bg:'rgba(129,140,248,0.12)' },
-    { label:'Completadas', value:counts['completada']??0,  color:'#34d399', bg:'rgba(52,211,153,0.12)' },
+    { label:'Total',       value:solicitudes.length,       icon:'folder_shared', color:T.primaryC,  badge:'+100%', badgeBg:'rgba(124,58,237,0.15)' },
+    { label:'Pendientes',  value:counts['pendiente']??0,   icon:'pending_actions', color:'#FFB0CD', badge:'Stable', badgeBg:'rgba(255,176,205,0.1)' },
+    { label:'En proceso',  value:counts['en_proceso']??0,  icon:'sync',          color:'#60A5FA',   badge:'Active', badgeBg:'rgba(96,165,250,0.1)' },
+    { label:'Completadas', value:counts['completada']??0,  icon:'check_circle',  color:T.secondary, badge:'Success', badgeBg:'rgba(65,229,117,0.1)' },
   ]
 
   const NAV = [
-    { id:'dash',     icon:'⬡', label:'Dashboard' },
-    { id:'lista',    icon:'◈', label:'Solicitudes' },
-    { id:'metricas', icon:'◎', label:'Métricas' },
-    { id:'pdf',      icon:'↓', label:'PDF' },
+    { id:'dash',     icon:'dashboard',   label:'Dashboard' },
+    { id:'lista',    icon:'list_alt',    label:'Solicitudes' },
+    { id:'metricas', icon:'bar_chart',   label:'Métricas' },
+    { id:'pdf',      icon:'description', label:'Reportes' },
   ] as const
 
+  const inputStyle: React.CSSProperties = {
+    background: T.surface, border:'none', borderRadius:12, padding:'8px 14px',
+    fontSize:13, color:T.onSurf, outline:'none', width:'100%',
+  }
+  const labelStyle: React.CSSProperties = {
+    fontSize:11, color:T.muted, fontWeight:600, textTransform:'uppercase',
+    letterSpacing:'.1em', display:'block', marginBottom:6,
+  }
+
   return (
-    <div style={{ minHeight:'100vh', background:'radial-gradient(ellipse at 20% 0%,rgba(94,0,168,0.25) 0%,transparent 60%), radial-gradient(ellipse at 80% 100%,rgba(233,30,140,0.15) 0%,transparent 60%), #06000F' }}>
+    <>
+      {/* Material Symbols font */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"/>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"/>
 
-      {/* ── TOP BAR ── */}
-      <header style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'1px solid rgba(255,255,255,0.07)', backdropFilter:'blur(20px)', position:'sticky', top:0, zIndex:50, background:'rgba(6,0,15,0.7)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:24 }}>
-          <img src="/logo.png" alt="Relevvo" style={{ height:28, objectFit:'contain' }}/>
-          <nav style={{ display:'flex', gap:4 }}>
-            {NAV.map(n => (
-              <button key={n.id} onClick={()=>setActiveNav(n.id as any)} style={{
-                padding:'7px 14px', borderRadius:10, fontSize:13, border:'none', cursor:'pointer', transition:'.2s',
-                background: activeNav===n.id ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: activeNav===n.id ? '#fff' : 'rgba(255,255,255,0.4)',
-                fontWeight: activeNav===n.id ? 600 : 400,
-              }}>
-                {n.label}
-              </button>
-            ))}
+      <div style={{ minHeight:'100vh', background:T.bg, fontFamily:"'Inter', system-ui, sans-serif", color:T.onSurf, display:'flex' }}>
+
+        {/* ── SIDEBAR ── */}
+        <aside style={{
+          width:256, flexShrink:0, height:'100vh', position:'sticky', top:0,
+          background:T.sidebar, display:'flex', flexDirection:'column', padding:'0 12px 20px',
+          overflowY:'auto',
+        }}>
+          {/* Logo */}
+          <div style={{ padding:'28px 12px 24px', display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{
+              width:40, height:40, borderRadius:12, flexShrink:0,
+              background:'linear-gradient(135deg, #7C3AED, #D2BBFF)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow:'0 4px 20px rgba(124,58,237,0.4)',
+            }}>
+              <img src="/logo.png" alt="R" style={{ width:26, height:26, objectFit:'contain', filter:'brightness(10)' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display='none' }}/>
+            </div>
+            <div>
+              <p style={{ fontSize:16, fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-.03em' }}>Relevvo</p>
+              <p style={{ fontSize:11, color:T.muted, fontWeight:500, marginTop:2 }}>Studio Portal</p>
+            </div>
+          </div>
+
+          {/* Nav */}
+          <nav style={{ flex:1, display:'flex', flexDirection:'column', gap:2 }}>
+            {NAV.map(n => {
+              const active = activeNav === n.id
+              return (
+                <button key={n.id} onClick={() => setActiveNav(n.id as any)} style={{
+                  display:'flex', alignItems:'center', gap:12,
+                  padding:'11px 16px', borderRadius:14, border:'none', cursor:'pointer',
+                  fontSize:13, fontWeight:500, textAlign:'left', transition:'all .2s',
+                  background: active ? 'linear-gradient(135deg, #7C3AED, #D2BBFF)' : 'transparent',
+                  color: active ? '#fff' : T.muted,
+                  boxShadow: active ? '0 0 20px rgba(124,58,237,0.3)' : 'none',
+                }}>
+                  <Icon name={n.icon} filled={active}/>
+                  {n.label}
+                </button>
+              )
+            })}
           </nav>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          {notifPerm !== 'granted' && (
-            <button onClick={()=>Notification.requestPermission().then(p=>setNotifPerm(p))} style={{ fontSize:12, padding:'6px 12px', borderRadius:10, background:'rgba(94,0,168,0.2)', color:'#a78bfa', border:'1px solid rgba(94,0,168,0.35)', cursor:'pointer' }}>🔔 Alertas</button>
-          )}
-          {nuevas > 0 && (
-            <button onClick={()=>setNuevas(0)} style={{ fontSize:12, padding:'6px 12px', borderRadius:10, background:'rgba(233,30,140,0.15)', color:'#E91E8C', border:'1px solid rgba(233,30,140,0.3)', cursor:'pointer' }}>{nuevas} nueva{nuevas>1?'s':''} ✦</button>
-          )}
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:12, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ width:26, height:26, borderRadius:'50%', background:'linear-gradient(135deg,#5E00A8,#E91E8C)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff' }}>R</div>
-            <span style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>Relevvo Studio</span>
-            <button onClick={()=>signOut({callbackUrl:'/admin/login'})} style={{ fontSize:11, color:'rgba(255,255,255,0.3)', background:'none', border:'none', cursor:'pointer', marginLeft:4 }}>Salir</button>
+
+          {/* Bottom */}
+          <div style={{ borderTop:`1px solid ${T.border}`, paddingTop:16, display:'flex', flexDirection:'column', gap:2 }}>
+            {notifPerm !== 'granted' && (
+              <button onClick={() => Notification.requestPermission().then(p => setNotifPerm(p))} style={{
+                display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderRadius:14,
+                border:'none', cursor:'pointer', fontSize:13, color:T.muted, background:'transparent',
+                fontWeight:500, textAlign:'left',
+              }}>
+                <Icon name="notifications"/> Activar alertas
+              </button>
+            )}
+            <button onClick={() => signOut({callbackUrl:'/admin/login'})} style={{
+              display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderRadius:14,
+              border:'none', cursor:'pointer', fontSize:13, color:T.muted, background:'transparent',
+              fontWeight:500,
+            }}>
+              <Icon name="logout"/> Salir
+            </button>
           </div>
-        </div>
-      </header>
+        </aside>
 
-      <div style={{ padding:'28px 28px 40px', maxWidth:1280, margin:'0 auto' }}>
+        {/* ── MAIN ── */}
+        <main style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
 
-        {/* ── DASHBOARD (bento) ── */}
-        {activeNav === 'dash' && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(12,1fr)', gridAutoRows:'auto', gap:16 }}>
+          {/* Top header */}
+          <header style={{
+            position:'sticky', top:0, zIndex:40,
+            background:'rgba(19,19,19,0.85)', backdropFilter:'blur(20px)',
+            WebkitBackdropFilter:'blur(20px)',
+            display:'flex', justifyContent:'space-between', alignItems:'center',
+            padding:'14px 32px', borderBottom:`1px solid ${T.border}`,
+          }}>
+            {/* Search */}
+            <div style={{ position:'relative', maxWidth:380, width:'100%' }}>
+              <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:T.muted, display:'flex' }}>
+                <Icon name="search" size={18}/>
+              </span>
+              <input
+                type="text" placeholder="Buscar solicitudes…"
+                value={search} onChange={e => { setSearch(e.target.value); if (activeNav!=='lista') setActiveNav('lista') }}
+                style={{ ...inputStyle, paddingLeft:38, paddingRight:14 }}
+              />
+            </div>
 
-            {/* Stat cards */}
-            {STATS.map((s,i) => (
-              <GlassCard key={s.label} style={{ gridColumn:`span 3`, padding:'20px 24px', background:s.bg, borderColor:`${s.color}22` }}>
-                <p style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'.2em', color:'rgba(255,255,255,0.4)', marginBottom:10 }}>{s.label}</p>
-                <p style={{ fontSize:36, fontWeight:700, color:s.color, lineHeight:1 }}>{s.value}</p>
-              </GlassCard>
-            ))}
+            {/* Right side */}
+            <div style={{ display:'flex', alignItems:'center', gap:20 }}>
+              {/* Notifications */}
+              <button
+                onClick={() => setNuevas(0)}
+                style={{ position:'relative', background:'none', border:'none', cursor:'pointer', color: nuevas>0 ? T.tertiary : T.muted, display:'flex', padding:4 }}
+              >
+                <Icon name="notifications" size={22}/>
+                {nuevas > 0 && (
+                  <span style={{
+                    position:'absolute', top:2, right:2, width:8, height:8,
+                    background:T.tertiary, borderRadius:'50%',
+                    border:`2px solid ${T.bg}`,
+                  }}/>
+                )}
+              </button>
 
-            {/* Chart — actividad 7 días */}
-            <GlassCard style={{ gridColumn:'span 8', padding:'22px 24px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
-                <div>
-                  <p style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:3 }}>Actividad reciente</p>
-                  <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>Solicitudes por día — últimos 7 días</p>
+              {/* Divider */}
+              <div style={{ width:1, height:32, background:T.borderMd }}/>
+
+              {/* User */}
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ textAlign:'right' }}>
+                  <p style={{ fontSize:13, fontWeight:700, color:'#fff', lineHeight:1, marginBottom:2 }}>Relevvo Studio</p>
+                  <p style={{ fontSize:11, color:T.primary, fontWeight:500 }}>Administrator</p>
                 </div>
-                <span style={{ fontSize:11, padding:'4px 10px', borderRadius:20, background:'rgba(233,30,140,0.15)', color:'#E91E8C', border:'1px solid rgba(233,30,140,0.3)' }}>
-                  {solicitudes.length} total
-                </span>
+                <div style={{
+                  width:38, height:38, borderRadius:'50%',
+                  background:'linear-gradient(135deg,#7C3AED,#D2BBFF)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:14, fontWeight:800, color:'#fff',
+                  border:`2px solid #7C3AED`,
+                  boxShadow:'0 0 12px rgba(124,58,237,0.35)',
+                }}>R</div>
               </div>
-              <div style={{ height:120 }}>
-                <LineChart data={chartData}/>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', marginTop:8 }}>
-                {chartData.map(d => (
-                  <span key={d.label} style={{ fontSize:10, color:'rgba(255,255,255,0.25)', textAlign:'center', flex:1 }}>{d.label}</span>
-                ))}
-              </div>
-            </GlassCard>
+            </div>
+          </header>
 
-            {/* Top clientes */}
-            <GlassCard style={{ gridColumn:'span 4', padding:'22px 24px' }}>
-              <p style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:4 }}>Top clientes</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginBottom:16 }}>Por número de solicitudes</p>
-              {topClientes.length === 0 ? (
-                <p style={{ fontSize:12, color:'rgba(255,255,255,0.2)' }}>Sin datos aún.</p>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {topClientes.map((m,i) => (
-                    <div key={m.cliente}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                        <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{m.cliente}</span>
-                        <span style={{ fontSize:12, color:'rgba(255,255,255,0.35)' }}>{m.total}</span>
+          {/* Content */}
+          <div style={{ flex:1, padding:'32px', overflowY:'auto' }}>
+
+            {/* ── DASHBOARD ── */}
+            {activeNav === 'dash' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:28, maxWidth:1200 }}>
+
+                {/* Hero */}
+                <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:16 }}>
+                  <div>
+                    <h2 style={{ fontSize:36, fontWeight:900, color:'#fff', letterSpacing:'-.04em', marginBottom:6, lineHeight:1 }}>
+                      Hola, Relevvo Studio
+                    </h2>
+                    <p style={{ fontSize:15, color:'rgba(229,226,225,0.6)', fontWeight:500 }}>
+                      Tu centro de control creativo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveNav('lista')}
+                    style={{
+                      display:'flex', alignItems:'center', gap:8,
+                      padding:'14px 24px', borderRadius:14, border:'none', cursor:'pointer',
+                      background:'linear-gradient(135deg, #7C3AED, #D2BBFF)',
+                      color:'#fff', fontWeight:700, fontSize:14,
+                      boxShadow:'0 8px 30px rgba(124,58,237,0.3)',
+                      flexShrink:0,
+                    }}
+                  >
+                    <Icon name="list_alt" size={18}/>
+                    Ver solicitudes
+                  </button>
+                </div>
+
+                {/* Stat cards */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+                  {STATS.map(s => (
+                    <Glass key={s.label} style={{ padding:24, position:'relative', overflow:'hidden' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+                        <div style={{ padding:10, borderRadius:12, background:`${s.color}20`, color:s.color, display:'flex' }}>
+                          <Icon name={s.icon} filled size={22}/>
+                        </div>
+                        <span style={{ fontSize:10, fontWeight:800, color:s.color, padding:'3px 8px', borderRadius:99, background:s.badgeBg }}>{s.badge}</span>
                       </div>
-                      <div style={{ height:4, borderRadius:99, background:'rgba(255,255,255,0.07)' }}>
-                        <div style={{ height:4, borderRadius:99, width:`${(m.total/(topClientes[0].total||1))*100}%`, background:'linear-gradient(90deg,#5E00A8,#E91E8C)' }}/>
-                      </div>
-                    </div>
+                      <p style={{ fontSize:13, color:T.muted, fontWeight:500, marginBottom:4 }}>{s.label}</p>
+                      <p style={{ fontSize:32, fontWeight:900, color:'#fff', lineHeight:1 }}>{s.value}</p>
+                      {/* Ambient glow */}
+                      <div style={{ position:'absolute', bottom:-24, right:-24, width:80, height:80, background:`${s.color}08`, borderRadius:'50%', filter:'blur(24px)' }}/>
+                    </Glass>
                   ))}
                 </div>
-              )}
-            </GlassCard>
 
-            {/* Recientes */}
-            <GlassCard style={{ gridColumn:'span 12', padding:'22px 24px' }}>
-              <p style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:16 }}>Solicitudes recientes</p>
-              {solicitudes.length === 0 ? (
-                <p style={{ fontSize:13, color:'rgba(255,255,255,0.2)', textAlign:'center', padding:'24px 0' }}>No hay solicitudes aún.</p>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
-                  {solicitudes.slice(0,6).map(s => {
-                    const est = estadoInfo(s.estado)
-                    return (
-                      <div key={s.id} style={{ borderRadius:14, padding:'14px 16px', background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-                          <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(94,0,168,0.25)', color:'#c084fc', border:'1px solid rgba(94,0,168,0.35)', fontWeight:600 }}>{s.cliente}</span>
-                          <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:`${est.color}18`, color:est.color, border:`1px solid ${est.color}30` }}>{est.label}</span>
-                        </div>
-                        <p style={{ fontSize:13, color:'rgba(255,255,255,0.75)', fontWeight:500, marginBottom:4 }}>{s.tipo}</p>
-                        <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' as any }}>{s.descripcion}</p>
+                {/* Chart + Top Clients */}
+                <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16 }}>
+                  {/* Bar chart */}
+                  <Glass style={{ padding:28, display:'flex', flexDirection:'column', height:340 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24 }}>
+                      <div>
+                        <h3 style={{ fontSize:17, fontWeight:700, color:'#fff', letterSpacing:'-.02em', marginBottom:4 }}>Actividad reciente</h3>
+                        <p style={{ fontSize:12, color:T.muted }}>Solicitudes por día — últimos 7 días</p>
                       </div>
+                      <span style={{ fontSize:12, fontWeight:700, padding:'5px 12px', borderRadius:99, background:'rgba(255,176,205,0.12)', color:T.tertiary }}>
+                        {solicitudes.length} total
+                      </span>
+                    </div>
+                    <div style={{ flex:1, minHeight:0 }}>
+                      <BarChart data={chartData}/>
+                    </div>
+                  </Glass>
+
+                  {/* Top clients */}
+                  <Glass style={{ padding:28, display:'flex', flexDirection:'column', height:340 }}>
+                    <div style={{ marginBottom:20 }}>
+                      <h3 style={{ fontSize:17, fontWeight:700, color:'#fff', letterSpacing:'-.02em', marginBottom:4 }}>Top clientes</h3>
+                      <p style={{ fontSize:12, color:T.muted }}>Por volumen de solicitudes</p>
+                    </div>
+                    <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column', gap:16 }}>
+                      {topClientes.length === 0 ? (
+                        <p style={{ fontSize:13, color:T.muted, textAlign:'center', marginTop:24 }}>Sin datos aún.</p>
+                      ) : topClientes.map((m, i) => (
+                        <div key={m.cliente} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', opacity: 1 - i * 0.12 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                            <div style={{
+                              width:38, height:38, borderRadius:'50%', flexShrink:0,
+                              background: T.cardHigh,
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              fontSize:14, fontWeight:700, color:'#fff',
+                            }}>{m.cliente[0]}</div>
+                            <div>
+                              <p style={{ fontSize:13, fontWeight:700, color:'#fff', lineHeight:1, marginBottom:2 }}>{m.cliente}</p>
+                              <p style={{ fontSize:11, color:T.muted }}>cliente</p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign:'right' }}>
+                            <p style={{ fontSize:14, fontWeight:900, color:T.secondary, lineHeight:1, marginBottom:2 }}>{m.total}</p>
+                            <p style={{ fontSize:9, color:'#374151', fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em' }}>REQ</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Glass>
+                </div>
+
+                {/* Recent table */}
+                <Glass style={{ overflow:'hidden' }}>
+                  <div style={{
+                    padding:'20px 28px', borderBottom:`1px solid ${T.border}`,
+                    display:'flex', justifyContent:'space-between', alignItems:'center',
+                    background:'rgba(255,255,255,0.03)',
+                  }}>
+                    <h3 style={{ fontSize:17, fontWeight:700, color:'#fff', letterSpacing:'-.02em' }}>Solicitudes recientes</h3>
+                    <button onClick={() => setActiveNav('lista')} style={{ fontSize:13, color:T.primary, fontWeight:700, background:'none', border:'none', cursor:'pointer' }}>Ver todas →</button>
+                  </div>
+                  {solicitudes.length === 0 ? (
+                    <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'32px 0' }}>No hay solicitudes aún.</p>
+                  ) : (
+                    <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                      <thead>
+                        <tr style={{ background:'rgba(255,255,255,0.02)' }}>
+                          {['ID','Cliente','Descripción','Estado','Fecha',''].map(h => (
+                            <th key={h} style={{ padding:'12px 20px', textAlign:'left', fontSize:10, fontWeight:800, color:'#374151', textTransform:'uppercase', letterSpacing:'.12em', whiteSpace:'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {solicitudes.slice(0,6).map(s => (
+                          <tr key={s.id} style={{ borderTop:`1px solid ${T.border}`, transition:'background .15s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.03)'}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='transparent'}
+                          >
+                            <td style={{ padding:'16px 20px' }}>
+                              <span style={{ fontSize:12, fontWeight:700, color:T.primary }}>#{String(s.id).padStart(4,'0')}</span>
+                            </td>
+                            <td style={{ padding:'16px 20px' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                                <div style={{ width:30, height:30, borderRadius:8, background:T.cardHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>{s.cliente[0]}</div>
+                                <span style={{ fontSize:13, fontWeight:500, color:'#fff' }}>{s.cliente}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding:'16px 20px', maxWidth:280 }}>
+                              <p style={{ fontSize:12, color:T.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.tipo} — {s.descripcion}</p>
+                            </td>
+                            <td style={{ padding:'16px 20px' }}>
+                              <StatusBadge estado={s.estado}/>
+                            </td>
+                            <td style={{ padding:'16px 20px' }}>
+                              <span style={{ fontSize:12, color:T.muted, fontWeight:500 }}>
+                                {new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}
+                              </span>
+                            </td>
+                            <td style={{ padding:'16px 20px', textAlign:'right' }}>
+                              <button onClick={() => { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota??''); setActiveNav('lista') }}
+                                style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex', padding:4 }}>
+                                <Icon name="more_vert" size={18}/>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </Glass>
+              </div>
+            )}
+
+            {/* ── LISTA ── */}
+            {activeNav === 'lista' && (
+              <div style={{ maxWidth:900 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Solicitudes</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Gestiona y actualiza el estado de cada solicitud.</p>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap', alignItems:'center' }}>
+                  <select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} style={{ ...inputStyle, width:'auto' }}>
+                    <option value="todos">Todos los clientes</option>
+                    {CLIENTES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ ...inputStyle, width:'auto' }}>
+                    <option value="todos">Todos los estados</option>
+                    {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                  </select>
+                  <span style={{ fontSize:12, color:T.muted, marginLeft:'auto' }}>{filtered.length} solicitud{filtered.length!==1?'es':''}</span>
+                </div>
+
+                {/* Cards */}
+                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                  {filtered.map(s => {
+                    const urg = URGENCIAS.find(u => u.value === s.urgencia)
+                    const isEditing = editId === s.id
+                    return (
+                      <Glass key={s.id} style={{ padding:'20px 24px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                          <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                            <span style={{ fontSize:10, padding:'3px 9px', borderRadius:99, background:'rgba(124,58,237,0.2)', color:T.primary, fontWeight:700 }}>{s.cliente}</span>
+                            <span style={{ fontSize:14, color:'#fff', fontWeight:600 }}>{s.tipo}</span>
+                            {urg && <span style={{ fontSize:12, color:T.muted }}>{urg.label}</span>}
+                            <span style={{ fontSize:11, color:'#374151' }}>{new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                          </div>
+                          <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                            <StatusBadge estado={s.estado}/>
+                            <button onClick={() => isEditing ? setEditId(null) : openEdit(s)} style={{
+                              fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:'pointer',
+                              background:'rgba(255,255,255,0.07)', color:T.muted, fontWeight:500,
+                            }}>{isEditing?'Cancelar':'Editar'}</button>
+                          </div>
+                        </div>
+                        <p style={{ fontSize:13, color:'rgba(229,226,225,0.5)', lineHeight:1.65 }}>{s.descripcion}</p>
+                        {s.nota && !isEditing && (
+                          <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${T.border}` }}>
+                            <p style={{ fontSize:11, color:T.primary, fontWeight:700, marginBottom:4, textTransform:'uppercase', letterSpacing:'.08em' }}>Nota interna</p>
+                            <p style={{ fontSize:13, color:'rgba(229,226,225,0.45)' }}>{s.nota}</p>
+                          </div>
+                        )}
+                        {isEditing && (
+                          <div style={{ marginTop:18, paddingTop:18, borderTop:`1px solid ${T.border}`, display:'flex', flexDirection:'column', gap:14 }}>
+                            <div>
+                              <label style={labelStyle}>Estado</label>
+                              <select value={editEstado} onChange={e => setEditEstado(e.target.value)} style={inputStyle}>
+                                {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Nota para el cliente</label>
+                              <textarea value={editNota} onChange={e => setEditNota(e.target.value)} rows={2}
+                                placeholder="Ej: Listo para el jueves…" style={{ ...inputStyle, resize:'none', fontFamily:'inherit' }}/>
+                            </div>
+                            <button onClick={saveEdit} disabled={saving} style={{
+                              alignSelf:'flex-start', padding:'10px 24px', borderRadius:12, border:'none', cursor:saving?'wait':'pointer',
+                              background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13,
+                              opacity: saving ? .7 : 1,
+                            }}>{saving?'Guardando…':'Guardar cambios'}</button>
+                          </div>
+                        )}
+                      </Glass>
                     )
                   })}
+                  {filtered.length === 0 && (
+                    <p style={{ fontSize:14, color:T.muted, textAlign:'center', padding:'40px 0' }}>No hay solicitudes con estos filtros.</p>
+                  )}
                 </div>
-              )}
-            </GlassCard>
-          </div>
-        )}
-
-        {/* ── LISTA ── */}
-        {activeNav === 'lista' && (
-          <div>
-            <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap', alignItems:'center' }}>
-              <select value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} className="input" style={{ width:'auto' }}>
-                <option value="todos">Todos los clientes</option>
-                {CLIENTES.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={filtroEstado} onChange={e=>setFiltroEstado(e.target.value)} className="input" style={{ width:'auto' }}>
-                <option value="todos">Todos los estados</option>
-                {ESTADOS.map(e=><option key={e.value} value={e.value}>{e.label}</option>)}
-              </select>
-              <span style={{ fontSize:12, color:'rgba(255,255,255,0.3)', marginLeft:'auto' }}>{filtered.length} solicitud{filtered.length!==1?'es':''}</span>
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {filtered.map(s => {
-                const est = estadoInfo(s.estado); const urg = URGENCIAS.find(u=>u.value===s.urgencia); const isEditing = editId===s.id
-                return (
-                  <GlassCard key={s.id} style={{ padding:'18px 22px' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                        <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(94,0,168,0.25)', color:'#c084fc', border:'1px solid rgba(94,0,168,0.35)', fontWeight:600 }}>{s.cliente}</span>
-                        <span style={{ fontSize:13, color:'#fff', fontWeight:500 }}>{s.tipo}</span>
-                        {urg && <span style={{ fontSize:11, color:'rgba(255,255,255,0.3)' }}>{urg.label}</span>}
-                        <span style={{ fontSize:11, color:'rgba(255,255,255,0.2)' }}>{new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-                      </div>
-                      <div style={{ display:'flex', gap:8, flexShrink:0 }}>
-                        <span style={{ fontSize:11, padding:'4px 10px', borderRadius:20, background:`${est.color}18`, color:est.color, border:`1px solid ${est.color}30` }}>{est.label}</span>
-                        <button onClick={()=>isEditing?setEditId(null):openEdit(s)} style={{ fontSize:12, padding:'4px 10px', borderRadius:8, background:'rgba(255,255,255,0.07)', color:'rgba(255,255,255,0.5)', border:'none', cursor:'pointer' }}>{isEditing?'Cancelar':'Editar'}</button>
-                      </div>
-                    </div>
-                    <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.6 }}>{s.descripcion}</p>
-                    {s.nota && !isEditing && <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid rgba(255,255,255,0.07)' }}><p style={{ fontSize:11, color:'#a78bfa', fontWeight:600, marginBottom:4 }}>Nota interna:</p><p style={{ fontSize:13, color:'rgba(255,255,255,0.45)' }}>{s.nota}</p></div>}
-                    {isEditing && (
-                      <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid rgba(255,255,255,0.08)', display:'flex', flexDirection:'column', gap:12 }}>
-                        <div>
-                          <label className="label">Estado</label>
-                          <select value={editEstado} onChange={e=>setEditEstado(e.target.value)} className="input">
-                            {ESTADOS.map(e=><option key={e.value} value={e.value}>{e.label}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="label">Nota para el cliente</label>
-                          <textarea value={editNota} onChange={e=>setEditNota(e.target.value)} rows={2} className="input resize-none" placeholder="Ej: Listo para el jueves…"/>
-                        </div>
-                        <button onClick={saveEdit} disabled={saving} className="btn-primary" style={{ alignSelf:'flex-start', padding:'8px 24px', fontSize:13 }}>{saving?'Guardando…':'Guardar cambios'}</button>
-                      </div>
-                    )}
-                  </GlassCard>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── MÉTRICAS ── */}
-        {activeNav === 'metricas' && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
-            <GlassCard style={{ padding:'24px' }}>
-              <p style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:4 }}>Solicitudes por cliente</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginBottom:20 }}>Ranking total acumulado</p>
-              {metricasCliente.length===0 ? <p style={{ fontSize:13, color:'rgba(255,255,255,0.2)' }}>Sin datos aún.</p> :
-                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  {metricasCliente.map(m => (
-                    <div key={m.cliente}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                        <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{m.cliente}</span>
-                        <span style={{ fontSize:12, color:'rgba(255,255,255,0.35)' }}>{m.total} · {m.completadas} ✓</span>
-                      </div>
-                      <div style={{ height:5, borderRadius:99, background:'rgba(255,255,255,0.07)' }}>
-                        <div style={{ height:5, borderRadius:99, width:`${(m.total/(metricasCliente[0].total||1))*100}%`, background:'linear-gradient(90deg,#5E00A8,#E91E8C)' }}/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              }
-            </GlassCard>
-            <GlassCard style={{ padding:'24px' }}>
-              <p style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:4 }}>Tiempo de resolución</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginBottom:20 }}>Promedio por cliente (solicitudes completadas)</p>
-              {metricasCliente.filter(m=>m.promedioHoras!==null).length===0 ? <p style={{ fontSize:13, color:'rgba(255,255,255,0.2)' }}>Sin completadas aún.</p> :
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
-                  {metricasCliente.filter(m=>m.promedioHoras!==null).map(m => {
-                    const h=m.promedioHoras!; const t=h<1?`${Math.round(h*60)} min`:h<24?`${h.toFixed(1)} h`:`${(h/24).toFixed(1)} días`
-                    return (
-                      <div key={m.cliente} style={{ borderRadius:14, textAlign:'center', padding:'18px 12px', background:'rgba(167,139,250,0.07)', border:'1px solid rgba(167,139,250,0.15)' }}>
-                        <p style={{ fontSize:22, fontWeight:700, color:'#a78bfa' }}>{t}</p>
-                        <p style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{m.cliente}</p>
-                      </div>
-                    )
-                  })}
-                </div>
-              }
-            </GlassCard>
-          </div>
-        )}
-
-        {/* ── PDF ── */}
-        {activeNav === 'pdf' && (
-          <div style={{ maxWidth:440 }}>
-            <GlassCard style={{ padding:'28px' }}>
-              <p style={{ fontSize:16, fontWeight:600, color:'#fff', marginBottom:4 }}>Exportar reporte</p>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.35)', marginBottom:24 }}>Filtra y genera un PDF con las solicitudes</p>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-                <div><label className="label">Desde</label><input type="date" value={pdfDesde} onChange={e=>setPdfDesde(e.target.value)} className="input"/></div>
-                <div><label className="label">Hasta</label><input type="date" value={pdfHasta} onChange={e=>setPdfHasta(e.target.value)} className="input"/></div>
               </div>
-              <div style={{ marginBottom:20 }}>
-                <label className="label">Cliente</label>
-                <select value={pdfCliente} onChange={e=>setPdfCliente(e.target.value)} className="input">
-                  <option value="todos">Todos los clientes</option>
-                  {CLIENTES.map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <button onClick={generarPDF} className="btn-primary" style={{ width:'100%', fontSize:14 }}>↓ Generar PDF</button>
-            </GlassCard>
-          </div>
-        )}
+            )}
 
+            {/* ── MÉTRICAS ── */}
+            {activeNav === 'metricas' && (
+              <div style={{ maxWidth:900 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Métricas</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Rendimiento por cliente y tiempos de resolución.</p>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
+                  <Glass style={{ padding:28 }}>
+                    <h3 style={{ fontSize:16, fontWeight:700, color:'#fff', marginBottom:4 }}>Solicitudes por cliente</h3>
+                    <p style={{ fontSize:12, color:T.muted, marginBottom:20 }}>Ranking total acumulado</p>
+                    {metricasCliente.length === 0 ? <p style={{ fontSize:13, color:T.muted }}>Sin datos aún.</p> :
+                      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                        {metricasCliente.map(m => (
+                          <div key={m.cliente}>
+                            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                              <span style={{ fontSize:13, color:T.onSurf, fontWeight:500 }}>{m.cliente}</span>
+                              <span style={{ fontSize:12, color:T.muted }}>{m.total} · {m.completadas} ✓</span>
+                            </div>
+                            <div style={{ height:5, borderRadius:99, background:'rgba(255,255,255,0.06)' }}>
+                              <div style={{ height:5, borderRadius:99, width:`${(m.total/(metricasCliente[0].total||1))*100}%`, background:'linear-gradient(90deg,#7C3AED,#D2BBFF)', transition:'width .5s ease' }}/>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    }
+                  </Glass>
+                  <Glass style={{ padding:28 }}>
+                    <h3 style={{ fontSize:16, fontWeight:700, color:'#fff', marginBottom:4 }}>Tiempo de resolución</h3>
+                    <p style={{ fontSize:12, color:T.muted, marginBottom:20 }}>Promedio por cliente (completadas)</p>
+                    {metricasCliente.filter(m=>m.promedioHoras!==null).length === 0 ? <p style={{ fontSize:13, color:T.muted }}>Sin completadas aún.</p> :
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
+                        {metricasCliente.filter(m=>m.promedioHoras!==null).map(m => {
+                          const h=m.promedioHoras!; const t=h<1?`${Math.round(h*60)} min`:h<24?`${h.toFixed(1)} h`:`${(h/24).toFixed(1)} días`
+                          return (
+                            <div key={m.cliente} style={{ borderRadius:14, textAlign:'center', padding:'20px 12px', background:'rgba(124,58,237,0.08)', border:`1px solid rgba(124,58,237,0.15)` }}>
+                              <p style={{ fontSize:24, fontWeight:900, color:T.primary, letterSpacing:'-.03em' }}>{t}</p>
+                              <p style={{ fontSize:11, color:T.muted, marginTop:5 }}>{m.cliente}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    }
+                  </Glass>
+                </div>
+              </div>
+            )}
+
+            {/* ── PDF ── */}
+            {activeNav === 'pdf' && (
+              <div style={{ maxWidth:480 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Reportes</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Genera un PDF con las solicitudes filtradas.</p>
+                </div>
+                <Glass style={{ padding:28 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+                    <div><label style={labelStyle}>Desde</label><input type="date" value={pdfDesde} onChange={e=>setPdfDesde(e.target.value)} style={inputStyle}/></div>
+                    <div><label style={labelStyle}>Hasta</label><input type="date" value={pdfHasta} onChange={e=>setPdfHasta(e.target.value)} style={inputStyle}/></div>
+                  </div>
+                  <div style={{ marginBottom:24 }}>
+                    <label style={labelStyle}>Cliente</label>
+                    <select value={pdfCliente} onChange={e=>setPdfCliente(e.target.value)} style={inputStyle}>
+                      <option value="todos">Todos los clientes</option>
+                      {CLIENTES.map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={generarPDF} style={{
+                    width:'100%', padding:'14px', borderRadius:14, border:'none', cursor:'pointer',
+                    background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff',
+                    fontWeight:700, fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                    boxShadow:'0 8px 30px rgba(124,58,237,0.3)',
+                  }}>
+                    <Icon name="download" size={18}/> Generar PDF
+                  </button>
+                </Glass>
+              </div>
+            )}
+
+          </div>
+        </main>
       </div>
-    </div>
+    </>
   )
 }
