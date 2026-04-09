@@ -1,8 +1,10 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
+import { authConfig } from '@/auth.config'
 import { CLIENT_PIN_MAP } from '@/lib/constants'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       id: 'cliente-pin',
@@ -48,24 +50,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.role = (user as any).role
-        token.name = user.name   // preserve name explicitly
-      }
-      return token
-    },
-    session({ session, token }) {
-      if (session.user) {
-        (session.user as any).role = token.role
-        session.user.name = token.name ?? null  // always forward name from token
-      }
-      return session
-    },
-  },
-
-  pages: { signIn: '/login' },
-  session: { strategy: 'jwt' },
 })
