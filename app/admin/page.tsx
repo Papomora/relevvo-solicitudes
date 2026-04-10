@@ -124,6 +124,7 @@ export default function AdminPage() {
   const [editPin, setEditPin]             = useState<Record<string,string>>({})
   const [editingPin, setEditingPin]       = useState<string|null>(null)
   const [savingPin, setSavingPin]         = useState(false)
+  const [aiLoading, setAiLoading]         = useState(false)
   const [showModal, setShowModal]         = useState(false)
   const [mCliente, setMCliente]           = useState('')
   const [mTipo, setMTipo]                 = useState('')
@@ -194,6 +195,21 @@ export default function AdminPage() {
     (filtroEstado==='todos'||s.estado===filtroEstado) &&
     (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
   ), [solicitudes, filtroCliente, filtroEstado, search])
+
+  // ── IA sugerencia ─────────────────────────────────────────
+  async function sugerirConIA(s: Solicitud) {
+    setAiLoading(true)
+    const res = await fetch('/api/admin/ai-suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente: s.cliente, tipo: s.tipo, urgencia: s.urgencia, descripcion: s.descripcion, estado: editEstado }),
+    })
+    setAiLoading(false)
+    if (res.ok) {
+      const { suggestion } = await res.json()
+      setEditNota(suggestion)
+    }
+  }
 
   // ── Clientes / PINs ───────────────────────────────────────
   const fetchClientePins = useCallback(async () => {
@@ -648,8 +664,14 @@ export default function AdminPage() {
                               </select>
                             </div>
                             <div>
-                              <label style={labelStyle}>Nota para el cliente</label>
-                              <textarea value={editNota} onChange={e => setEditNota(e.target.value)} rows={2}
+                              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                                <label style={labelStyle}>Nota para el cliente</label>
+                                <button onClick={() => sugerirConIA(s)} disabled={aiLoading} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, padding:'4px 10px', borderRadius:8, border:'none', cursor: aiLoading ? 'wait' : 'pointer', background:'rgba(124,58,237,0.15)', color:T.primary, fontWeight:600, opacity: aiLoading ? .6 : 1 }}>
+                                  <Icon name="auto_awesome" size={13}/>
+                                  {aiLoading ? 'Generando…' : 'Sugerir con IA'}
+                                </button>
+                              </div>
+                              <textarea value={editNota} onChange={e => setEditNota(e.target.value)} rows={3}
                                 placeholder="Ej: Listo para el jueves…" style={{ ...inputStyle, resize:'none', fontFamily:'inherit' }}/>
                             </div>
                             <button onClick={saveEdit} disabled={saving} style={{
