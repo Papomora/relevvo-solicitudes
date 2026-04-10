@@ -3,14 +3,16 @@
    solicitudes.relevvostudio.com
 ═══════════════════════════════════════════
 
-CLIENTE          PIN
-───────────────────────
-ARü              7294
-Crusso           5831
-Groi             4617
-Molicie          9382
-Versla           2758
-Visuality        6143
+CLIENTE                PIN
+──────────────────────────────
+ARü                    7294
+Coondor                3749
+Crusso                 5831
+Fresitas la Playita    8261
+Groi                   4617
+Molicie                9382
+Versla                 2758
+Visuality              6143
 
 ───────────────────────
 ADMIN

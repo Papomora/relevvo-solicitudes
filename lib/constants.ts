@@ -1,6 +1,8 @@
 export const CLIENTES = [
   'ARü',
+  'Coondor',
   'Crusso',
+  'Fresitas la Playita',
   'Groi',
   'Molicie',
   'Versla',
@@ -9,12 +11,14 @@ export const CLIENTES = [
 
 // Maps client name → env var key
 export const CLIENT_PIN_MAP: Record<string, string> = {
-  'ARü':       'PIN_ARU',
-  'Crusso':    'PIN_CRUSSO',
-  'Groi':      'PIN_GROI',
-  'Molicie':   'PIN_MOLICIE',
-  'Versla':    'PIN_VERSLA',
-  'Visuality': 'PIN_VISUALITY',
+  'ARü':                 'PIN_ARU',
+  'Coondor':             'PIN_COONDOR',
+  'Crusso':              'PIN_CRUSSO',
+  'Fresitas la Playita': 'PIN_FRESITAS',
+  'Groi':                'PIN_GROI',
+  'Molicie':             'PIN_MOLICIE',
+  'Versla':              'PIN_VERSLA',
+  'Visuality':           'PIN_VISUALITY',
 }
 
 export const TIPOS = [

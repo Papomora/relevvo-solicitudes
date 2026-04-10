@@ -119,6 +119,13 @@ export default function AdminPage() {
   const [pdfHasta, setPdfHasta]           = useState('')
   const [pdfCliente, setPdfCliente]       = useState('todos')
   const [search, setSearch]               = useState('')
+  const [showModal, setShowModal]         = useState(false)
+  const [mCliente, setMCliente]           = useState('')
+  const [mTipo, setMTipo]                 = useState('')
+  const [mUrgencia, setMUrgencia]         = useState('')
+  const [mDesc, setMDesc]                 = useState('')
+  const [mSending, setMSending]           = useState(false)
+  const [mError, setMError]               = useState('')
 
   const fetchAll = useCallback(async () => {
     const res = await fetch('/api/solicitudes')
@@ -182,6 +189,26 @@ export default function AdminPage() {
     (filtroEstado==='todos'||s.estado===filtroEstado) &&
     (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
   ), [solicitudes, filtroCliente, filtroEstado, search])
+
+  // ── Admin crear solicitud ──────────────────────────────────
+  async function crearSolicitud() {
+    setMError('')
+    if (!mCliente || !mTipo || !mUrgencia || !mDesc.trim()) { setMError('Completa todos los campos.'); return }
+    setMSending(true)
+    const res = await fetch('/api/admin/solicitudes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente: mCliente, tipo: mTipo, urgencia: mUrgencia, descripcion: mDesc }),
+    })
+    setMSending(false)
+    if (res.ok) {
+      setShowModal(false); setMCliente(''); setMTipo(''); setMUrgencia(''); setMDesc(''); setMError('')
+      fetchAll()
+    } else {
+      const data = await res.json()
+      setMError(data.error ?? 'Error al crear.')
+    }
+  }
 
   // ── PDF ────────────────────────────────────────────────────
   function generarPDF() {
@@ -377,7 +404,7 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setActiveNav('lista')}
+                    onClick={() => setShowModal(true)}
                     style={{
                       display:'flex', alignItems:'center', gap:8,
                       padding:'14px 24px', borderRadius:14, border:'none', cursor:'pointer',
@@ -387,8 +414,8 @@ export default function AdminPage() {
                       flexShrink:0,
                     }}
                   >
-                    <Icon name="list_alt" size={18}/>
-                    Ver solicitudes
+                    <Icon name="add_circle" size={18}/>
+                    Nueva solicitud
                   </button>
                 </div>
 
@@ -699,6 +726,93 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+
+      {/* ── MODAL Nueva Solicitud ── */}
+      {showModal && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowModal(false) }}
+          style={{
+            position:'fixed', inset:0, zIndex:200,
+            background:'rgba(0,0,0,0.6)', backdropFilter:'blur(8px)',
+            display:'flex', alignItems:'center', justifyContent:'center', padding:24,
+          }}
+        >
+          <Glass style={{ width:'100%', maxWidth:480, padding:32, position:'relative' }}>
+            {/* Header */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
+              <div>
+                <h3 style={{ fontSize:20, fontWeight:800, color:'#fff', letterSpacing:'-.03em', marginBottom:3 }}>Nueva solicitud</h3>
+                <p style={{ fontSize:12, color:T.muted }}>Crea una tarea en nombre de un cliente</p>
+              </div>
+              <button onClick={() => setShowModal(false)} style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex', padding:4 }}>
+                <Icon name="close" size={22}/>
+              </button>
+            </div>
+
+            {/* Form */}
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              {/* Cliente */}
+              <div>
+                <label style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.1em', display:'block', marginBottom:6 }}>Cliente</label>
+                <select value={mCliente} onChange={e => setMCliente(e.target.value)}
+                  style={{ width:'100%', background:T.surface, border:'none', borderRadius:12, padding:'12px 14px', fontSize:14, color: mCliente ? T.onSurf : T.muted, outline:'none', appearance:'none' as any }}>
+                  <option value="">Selecciona cliente…</option>
+                  {CLIENTES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              {/* Tipo */}
+              <div>
+                <label style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.1em', display:'block', marginBottom:6 }}>Tipo de solicitud</label>
+                <select value={mTipo} onChange={e => setMTipo(e.target.value)}
+                  style={{ width:'100%', background:T.surface, border:'none', borderRadius:12, padding:'12px 14px', fontSize:14, color: mTipo ? T.onSurf : T.muted, outline:'none', appearance:'none' as any }}>
+                  <option value="">Selecciona tipo…</option>
+                  {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+
+              {/* Urgencia */}
+              <div>
+                <label style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.1em', display:'block', marginBottom:6 }}>Prioridad</label>
+                <div style={{ display:'flex', gap:8 }}>
+                  {URGENCIAS.map(u => (
+                    <button key={u.value} onClick={() => setMUrgencia(u.value)} style={{
+                      flex:1, padding:'10px 8px', borderRadius:10, border:'none', cursor:'pointer',
+                      fontSize:12, fontWeight:600, transition:'all .15s',
+                      background: mUrgencia === u.value ? `${ESTADOS.find(e=>e.value==='pendiente')?.color ?? '#7C3AED'}20` : T.surface,
+                      color: mUrgencia === u.value ? '#fff' : T.muted,
+                      outline: mUrgencia === u.value ? '1.5px solid rgba(124,58,237,0.5)' : 'none',
+                    }}>
+                      {u.label.split('—')[0].trim()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.1em', display:'block', marginBottom:6 }}>Descripción</label>
+                <textarea
+                  value={mDesc} onChange={e => setMDesc(e.target.value)} rows={4}
+                  placeholder="Describe la tarea con el mayor detalle posible…"
+                  style={{ width:'100%', background:T.surface, border:'none', borderRadius:12, padding:'12px 14px', fontSize:14, color:T.onSurf, outline:'none', resize:'none', fontFamily:'inherit', boxSizing:'border-box' as any }}
+                />
+              </div>
+
+              {mError && <p style={{ fontSize:12, color:T.tertiary }}>{mError}</p>}
+
+              <button onClick={crearSolicitud} disabled={mSending} style={{
+                padding:'14px', borderRadius:12, border:'none', cursor: mSending ? 'wait' : 'pointer',
+                background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff',
+                fontWeight:700, fontSize:14, opacity: mSending ? .7 : 1,
+                boxShadow:'0 6px 24px rgba(124,58,237,0.3)',
+              }}>
+                {mSending ? 'Creando…' : 'Crear solicitud'}
+              </button>
+            </div>
+          </Glass>
+        </div>
+      )}
     </>
   )
 }
