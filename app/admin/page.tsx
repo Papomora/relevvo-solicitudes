@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { ESTADOS, CLIENTES, URGENCIAS } from '@/lib/constants'
+import { ESTADOS, CLIENTES, URGENCIAS, TIPOS } from '@/lib/constants'
 
 type Adjunto = { url: string; name: string }
 type Solicitud = {
