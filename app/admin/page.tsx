@@ -114,11 +114,16 @@ export default function AdminPage() {
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
   const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default')
-  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'>('dash')
+  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'|'clientes'>('dash')
   const [pdfDesde, setPdfDesde]           = useState('')
   const [pdfHasta, setPdfHasta]           = useState('')
   const [pdfCliente, setPdfCliente]       = useState('todos')
   const [search, setSearch]               = useState('')
+  const [clientePins, setClientePins]     = useState<{cliente:string;pin:string;source:string}[]>([])
+  const [pinVisible, setPinVisible]       = useState<Record<string,boolean>>({})
+  const [editPin, setEditPin]             = useState<Record<string,string>>({})
+  const [editingPin, setEditingPin]       = useState<string|null>(null)
+  const [savingPin, setSavingPin]         = useState(false)
   const [showModal, setShowModal]         = useState(false)
   const [mCliente, setMCliente]           = useState('')
   const [mTipo, setMTipo]                 = useState('')
@@ -190,6 +195,25 @@ export default function AdminPage() {
     (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
   ), [solicitudes, filtroCliente, filtroEstado, search])
 
+  // ── Clientes / PINs ───────────────────────────────────────
+  const fetchClientePins = useCallback(async () => {
+    const res = await fetch('/api/admin/clientes')
+    if (res.ok) setClientePins(await res.json())
+  }, [])
+
+  useEffect(() => { if (activeNav === 'clientes') fetchClientePins() }, [activeNav, fetchClientePins])
+
+  async function guardarPin(cliente: string) {
+    const nuevo = editPin[cliente]
+    if (!nuevo || !/^\d{4}$/.test(nuevo)) return
+    setSavingPin(true)
+    const res = await fetch(`/api/admin/clientes/${encodeURIComponent(cliente)}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ pin: nuevo }),
+    })
+    setSavingPin(false)
+    if (res.ok) { setEditingPin(null); fetchClientePins() }
+  }
+
   // ── Admin crear solicitud ──────────────────────────────────
   async function crearSolicitud() {
     setMError('')
@@ -242,6 +266,7 @@ export default function AdminPage() {
     { id:'lista',    icon:'list_alt',    label:'Solicitudes' },
     { id:'metricas', icon:'bar_chart',   label:'Métricas' },
     { id:'pdf',      icon:'description', label:'Reportes' },
+    { id:'clientes', icon:'group',       label:'Clientes' },
   ] as const
 
   const inputStyle: React.CSSProperties = {
@@ -688,6 +713,84 @@ export default function AdminPage() {
                       </div>
                     }
                   </Glass>
+                </div>
+              </div>
+            )}
+
+            {/* ── CLIENTES / PINs ── */}
+            {activeNav === 'clientes' && (
+              <div style={{ maxWidth:640 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Clientes</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Visualiza y cambia el PIN de acceso de cada cliente.</p>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {clientePins.map(({ cliente, pin, source }) => {
+                    const isEditing = editingPin === cliente
+                    const visible   = pinVisible[cliente]
+                    return (
+                      <Glass key={cliente} style={{ padding:'18px 24px', display:'flex', alignItems:'center', gap:16 }}>
+                        {/* Avatar */}
+                        <div style={{ width:42, height:42, borderRadius:'50%', flexShrink:0, background:'linear-gradient(135deg,#7C3AED22,#7C3AED44)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:800, color:T.primary }}>
+                          {cliente[0]}
+                        </div>
+
+                        {/* Info */}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <p style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:3 }}>{cliente}</p>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            {isEditing ? (
+                              <input
+                                type="text" inputMode="numeric" maxLength={4}
+                                value={editPin[cliente] ?? ''}
+                                onChange={e => { if (/^\d{0,4}$/.test(e.target.value)) setEditPin(prev => ({...prev,[cliente]:e.target.value})) }}
+                                placeholder="Nuevo PIN"
+                                autoFocus
+                                style={{ width:100, background:T.surface, border:`1.5px solid #7C3AED`, borderRadius:8, padding:'5px 10px', fontSize:14, color:'#fff', outline:'none', letterSpacing:'.15em', fontFamily:'monospace' }}
+                              />
+                            ) : (
+                              <span style={{ fontSize:14, color:T.muted, fontFamily:'monospace', letterSpacing:'.2em' }}>
+                                {visible ? pin : '••••'}
+                              </span>
+                            )}
+                            {!isEditing && (
+                              <button onClick={() => setPinVisible(p => ({...p,[cliente]:!p[cliente]}))}
+                                style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex', padding:2 }}>
+                                <Icon name={visible ? 'visibility_off' : 'visibility'} size={16}/>
+                              </button>
+                            )}
+                            <span style={{ fontSize:10, padding:'2px 7px', borderRadius:99, fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', background: source==='db' ? 'rgba(65,229,117,0.1)' : 'rgba(124,58,237,0.1)', color: source==='db' ? T.secondary : T.primary }}>
+                              {source === 'db' ? 'personalizado' : 'por defecto'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                          {isEditing ? (
+                            <>
+                              <button onClick={() => guardarPin(cliente)} disabled={savingPin || (editPin[cliente]?.length ?? 0) < 4}
+                                style={{ padding:'7px 14px', borderRadius:9, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:12, opacity: (editPin[cliente]?.length ?? 0) < 4 ? .5 : 1 }}>
+                                {savingPin ? '…' : 'Guardar'}
+                              </button>
+                              <button onClick={() => setEditingPin(null)}
+                                style={{ padding:'7px 12px', borderRadius:9, border:'none', cursor:'pointer', background:T.surface, color:T.muted, fontSize:12 }}>
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => { setEditingPin(cliente); setEditPin(p => ({...p,[cliente]:''})) }}
+                              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:9, border:'none', cursor:'pointer', background:T.surface, color:T.muted, fontSize:12, fontWeight:500 }}>
+                              <Icon name="edit" size={14}/> Cambiar PIN
+                            </button>
+                          )}
+                        </div>
+                      </Glass>
+                    )
+                  })}
+                  {clientePins.length === 0 && (
+                    <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'32px 0' }}>Cargando clientes…</p>
+                  )}
                 </div>
               </div>
             )}

@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ClientePin {
+  id      Int    @id @default(autoincrement())
+  cliente String @unique
+  pin     String
+}
+
 model Solicitud {
   id          Int      @id @default(autoincrement())
   cliente     String

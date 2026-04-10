@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import { authConfig } from '@/auth.config'
 import { CLIENT_PIN_MAP } from '@/lib/constants'
+import { prisma } from '@/lib/prisma'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -16,7 +17,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const pin = credentials?.pin as string
         if (!pin || pin.length !== 4) return null
 
-        // Find the client whose PIN matches
+        // Check DB first (allows runtime PIN changes)
+        const dbRecord = await prisma.clientePin.findFirst({ where: { pin } })
+        if (dbRecord) return { id: dbRecord.cliente, name: dbRecord.cliente, role: 'cliente' }
+
+        // Fallback to env vars
         for (const [cliente, envKey] of Object.entries(CLIENT_PIN_MAP)) {
           const pinCorrecto = process.env[envKey]
           if (pinCorrecto && pin === pinCorrecto) {
