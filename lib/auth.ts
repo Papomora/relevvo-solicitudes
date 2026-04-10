@@ -10,21 +10,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       id: 'cliente-pin',
       name: 'Cliente PIN',
       credentials: {
-        cliente: { label: 'Cliente', type: 'text' },
-        pin:     { label: 'PIN',     type: 'password' },
+        pin: { label: 'PIN', type: 'password' },
       },
       async authorize(credentials) {
-        const cliente = credentials?.cliente as string
-        const pin     = credentials?.pin     as string
-        if (!cliente || !pin) return null
+        const pin = credentials?.pin as string
+        if (!pin || pin.length !== 4) return null
 
-        const envKey    = CLIENT_PIN_MAP[cliente]
-        if (!envKey) return null
-
-        const pinCorrecto = process.env[envKey]
-        if (!pinCorrecto || pin !== pinCorrecto) return null
-
-        return { id: cliente, name: cliente, role: 'cliente' }
+        // Find the client whose PIN matches
+        for (const [cliente, envKey] of Object.entries(CLIENT_PIN_MAP)) {
+          const pinCorrecto = process.env[envKey]
+          if (pinCorrecto && pin === pinCorrecto) {
+            return { id: cliente, name: cliente, role: 'cliente' }
+          }
+        }
+        return null
       },
     }),
 

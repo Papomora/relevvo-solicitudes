@@ -3,15 +3,13 @@
 import { useState, useRef } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { CLIENTES } from '@/lib/constants'
 
 export default function LoginPage() {
-  const router      = useRouter()
-  const [cliente, setCliente] = useState('')
+  const router    = useRouter()
   const [pin, setPin]         = useState(['', '', '', ''])
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
-  const inputRefs             = [
+  const inputRefs = [
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -35,16 +33,11 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (!cliente) { setError('Selecciona tu marca'); return }
     const pinStr = pin.join('')
     if (pinStr.length < 4) { setError('Ingresa tu PIN de 4 dígitos'); return }
 
     setLoading(true)
-    const res = await signIn('cliente-pin', {
-      cliente,
-      pin: pinStr,
-      redirect: false,
-    })
+    const res = await signIn('cliente-pin', { pin: pinStr, redirect: false })
     setLoading(false)
 
     if (res?.error) {
@@ -59,27 +52,12 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-10">
           <img src="/logo.png" alt="Relevvo Studio" className="h-14 object-contain" />
           <p className="text-xs tracking-[0.25em] uppercase text-white/30 mt-4">Portal de clientes</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-7">
-          <div>
-            <label className="label">Tu marca</label>
-            <select
-              value={cliente}
-              onChange={e => setCliente(e.target.value)}
-              className="input"
-            >
-              <option value="">Selecciona tu marca…</option>
-              {CLIENTES.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label className="label">PIN de acceso</label>
             <div className="flex gap-3 justify-center mt-2">
@@ -103,23 +81,15 @@ export default function LoginPage() {
             <p className="text-magenta text-sm text-center">{error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full"
-          >
+          <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Verificando…' : 'Entrar'}
           </button>
         </form>
 
         <p className="text-center text-white/20 text-xs mt-6">
           ¿No tienes acceso?{' '}
-          <a
-            href="https://wa.me/573223094005"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-magenta/60 hover:text-magenta transition-colors"
-          >
+          <a href="https://wa.me/573223094005" target="_blank" rel="noopener noreferrer"
+            className="text-magenta/60 hover:text-magenta transition-colors">
             Escríbenos
           </a>
         </p>
