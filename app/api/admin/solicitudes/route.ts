@@ -27,5 +27,14 @@ export async function POST(req: NextRequest) {
     data: { cliente, tipo, urgencia, descripcion: descripcion.trim(), adjuntos: [] },
   })
 
+  // WhatsApp alert (fire-and-forget)
+  const urgLabel = urgencia === 'alta' ? '🔴 Alta' : urgencia === 'media' ? '🟡 Media' : '🟢 Baja'
+  const text = encodeURIComponent(`🔔 *Solicitud creada por admin — Relevvo Portal*\n\n👤 Cliente: ${cliente}\n📋 Tipo: ${tipo}\n⚡ Prioridad: ${urgLabel}`)
+  for (let i = 1; i <= 3; i++) {
+    const phone  = process.env[`WHATSAPP_PHONE_${i}`]
+    const apikey = process.env[`WHATSAPP_APIKEY_${i}`]
+    if (phone && apikey) fetch(`https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${text}&apikey=${apikey}`).catch(()=>{})
+  }
+
   return NextResponse.json(nueva, { status: 201 })
 }

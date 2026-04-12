@@ -35,6 +35,15 @@ export const URGENCIAS = [
   { value: 'alta',  label: '🔴 Alta — lo antes posible' },
 ]
 
+export const PERFILES = [
+  'Diseño',
+  'Contenido',
+  'Pauta / Ads',
+  'Video',
+  'Web',
+  'Estrategia',
+]
+
 export const ESTADOS = [
   { value: 'pendiente',   label: 'Pendiente',   color: '#E91E8C' },
   { value: 'en_proceso',  label: 'En proceso',  color: '#7B00D4' },

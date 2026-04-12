@@ -21,6 +21,7 @@ model Solicitud {
   descripcion String
   estado      String   @default("pendiente")
   nota        String?
+  perfil      String?
   adjuntos    Json     @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

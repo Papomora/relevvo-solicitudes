@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { ESTADOS, CLIENTES, URGENCIAS, TIPOS } from '@/lib/constants'
+import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES } from '@/lib/constants'
 
 type Adjunto = { url: string; name: string }
 type Solicitud = {
   id: number; cliente: string; tipo: string; urgencia: string
   descripcion: string; estado: string; nota: string | null
-  adjuntos: Adjunto[]; createdAt: string; updatedAt: string
+  perfil: string | null; adjuntos: Adjunto[]; createdAt: string; updatedAt: string
 }
 
 // ── Design tokens ──────────────────────────────────────────────
@@ -110,6 +110,7 @@ export default function AdminPage() {
   const [editId, setEditId]               = useState<number | null>(null)
   const [editEstado, setEditEstado]       = useState('')
   const [editNota, setEditNota]           = useState('')
+  const [editPerfil, setEditPerfil]       = useState('')
   const [saving, setSaving]               = useState(false)
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
@@ -167,10 +168,10 @@ export default function AdminPage() {
     return () => clearInterval(iv)
   }, [lastPoll, fetchAll])
 
-  function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? '') }
+  function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? ''); setEditPerfil(s.perfil ?? '') }
   async function saveEdit() {
     if (!editId) return; setSaving(true)
-    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota}) })
+    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null}) })
     setSaving(false); setEditId(null); if (res.ok) fetchAll()
   }
 
@@ -618,7 +619,12 @@ export default function AdminPage() {
                             {urg && <span style={{ fontSize:12, color:T.muted }}>{urg.label}</span>}
                             <span style={{ fontSize:11, color:'#374151' }}>{new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
                           </div>
-                          <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                          <div style={{ display:'flex', gap:8, flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                            {s.perfil && (
+                              <span style={{ fontSize:10, padding:'3px 9px', borderRadius:99, fontWeight:700, textTransform:'uppercase', letterSpacing:'.07em', background:'rgba(65,229,117,0.1)', color:T.secondary }}>
+                                {s.perfil}
+                              </span>
+                            )}
                             <StatusBadge estado={s.estado}/>
                             <button onClick={() => isEditing ? setEditId(null) : openEdit(s)} style={{
                               fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:'pointer',
@@ -649,6 +655,13 @@ export default function AdminPage() {
                         )}
                         {isEditing && (
                           <div style={{ marginTop:18, paddingTop:18, borderTop:`1px solid ${T.border}`, display:'flex', flexDirection:'column', gap:14 }}>
+                            <div>
+                              <label style={labelStyle}>Perfil de desarrollo</label>
+                              <select value={editPerfil} onChange={e => setEditPerfil(e.target.value)} style={inputStyle}>
+                                <option value="">Sin asignar</option>
+                                {PERFILES.map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            </div>
                             <div>
                               <label style={labelStyle}>Estado</label>
                               <select value={editEstado} onChange={e => setEditEstado(e.target.value)} style={inputStyle}>
