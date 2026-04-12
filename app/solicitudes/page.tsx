@@ -73,6 +73,14 @@ export default function SolicitudesPage() {
   const [success, setSuccess]         = useState(false)
   const [error, setError]             = useState('')
   const [lastPoll, setLastPoll]       = useState(new Date().toISOString())
+  const [isMobile, setIsMobile]       = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const fetchSolicitudes = useCallback(async () => {
     const res = await fetch('/api/solicitudes')
@@ -131,10 +139,10 @@ export default function SolicitudesPage() {
 
       <div style={{ minHeight:'100vh', background:T.bg, fontFamily:"'Inter', system-ui, sans-serif", color:T.onSurf, display:'flex' }}>
 
-        {/* ── SIDEBAR ── */}
+        {/* ── SIDEBAR (desktop only) ── */}
         <aside style={{
           width:256, flexShrink:0, height:'100vh', position:'sticky', top:0,
-          background:T.sidebar, display:'flex', flexDirection:'column', padding:'0 12px 20px',
+          background:T.sidebar, display: isMobile ? 'none' : 'flex', flexDirection:'column', padding:'0 12px 20px',
         }}>
           {/* Logo */}
           <div style={{ padding:'28px 12px 24px', display:'flex', alignItems:'center', gap:12 }}>
@@ -192,13 +200,22 @@ export default function SolicitudesPage() {
             background:'rgba(19,19,19,0.85)', backdropFilter:'blur(20px)',
             WebkitBackdropFilter:'blur(20px)',
             display:'flex', justifyContent:'space-between', alignItems:'center',
-            padding:'0 40px', height:72, borderBottom:`1px solid ${T.border}`,
+            padding: isMobile ? '0 16px' : '0 40px', height:64, borderBottom:`1px solid ${T.border}`,
           }}>
-            <h2 style={{
-              fontSize:22, fontWeight:700, letterSpacing:'-.03em',
-              background:'linear-gradient(135deg, #9F67FF, #D2BBFF)',
-              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            }}>Nueva Solicitud</h2>
+            {isMobile ? (
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <img src="/logo.png" alt="R" style={{ width:20, height:20, objectFit:'contain', filter:'brightness(10)' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none'}}/>
+                </div>
+                <span style={{ fontSize:16, fontWeight:800, color:'#fff', letterSpacing:'-.02em' }}>Relevvo</span>
+              </div>
+            ) : (
+              <h2 style={{
+                fontSize:22, fontWeight:700, letterSpacing:'-.03em',
+                background:'linear-gradient(135deg, #9F67FF, #D2BBFF)',
+                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+              }}>Nueva Solicitud</h2>
+            )}
 
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <button style={{ padding:8, borderRadius:'50%', background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex' }}>
@@ -214,16 +231,16 @@ export default function SolicitudesPage() {
           </header>
 
           {/* Content */}
-          <div style={{ padding:'40px 40px 80px', maxWidth:1100, width:'100%' }}>
+          <div style={{ padding: isMobile ? '24px 16px 100px' : '40px 40px 80px', maxWidth:1100, width:'100%' }}>
 
             {/* ── Form + Tips grid ── */}
-            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:48, marginBottom:80 }}>
+            <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: isMobile ? 24 : 48, marginBottom: isMobile ? 40 : 80 }}>
 
               {/* Left: Form */}
               <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
 
                 {/* Tipo + Urgencia */}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:16 }}>
                   <div>
                     <label style={{ fontSize:11, fontWeight:600, color:T.muted, textTransform:'uppercase', letterSpacing:'.15em', display:'block', marginBottom:10 }}>Tipo de solicitud</label>
                     <div style={{ position:'relative' }}>
@@ -288,8 +305,8 @@ export default function SolicitudesPage() {
                 </button>
               </div>
 
-              {/* Right: Guide + image */}
-              <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+              {/* Right: Guide + image (desktop only) */}
+              <div style={{ display: isMobile ? 'none' : 'flex', flexDirection:'column', gap:20 }}>
                 {/* Guide card */}
                 <div style={{
                   background:'rgba(42,42,42,0.6)', backdropFilter:'blur(40px)',
@@ -342,7 +359,7 @@ export default function SolicitudesPage() {
               {solicitudes.length === 0 ? (
                 <p style={{ fontSize:14, color:T.muted, textAlign:'center', padding:'48px 0' }}>Aún no tienes solicitudes enviadas.</p>
               ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 12 : 20 }}>
                   {solicitudes.slice(0, 6).map(s => {
                     const est = ESTADOS.find(e => e.value === s.estado) ?? ESTADOS[0]
                     return (
@@ -409,6 +426,35 @@ export default function SolicitudesPage() {
           </div>
         </main>
       </div>
+
+      {/* ── Mobile bottom nav ── */}
+      {isMobile && (
+        <nav style={{
+          position:'fixed', bottom:0, left:0, right:0, height:68,
+          background: T.sidebar,
+          borderTop:`1px solid ${T.border}`,
+          display:'flex', alignItems:'center', justifyContent:'space-around',
+          zIndex:50, paddingBottom:'env(safe-area-inset-bottom)',
+        }}>
+          {[
+            { icon:'send',    label:'Nueva',      active:true  },
+            { icon:'history', label:'Historial',  active:false },
+          ].map(item => (
+            <div key={item.label} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 20px', borderRadius:12,
+              background: item.active ? 'rgba(124,58,237,0.15)' : 'transparent' }}>
+              <Icon name={item.icon} filled={item.active} size={22}/>
+              <span style={{ fontSize:10, fontWeight:600, color: item.active ? T.primary : T.muted, letterSpacing:'.03em' }}>{item.label}</span>
+            </div>
+          ))}
+          <button onClick={() => signOut({ callbackUrl:'/login' })} style={{
+            display:'flex', flexDirection:'column', alignItems:'center', gap:4,
+            padding:'8px 20px', borderRadius:12, background:'none', border:'none', cursor:'pointer',
+          }}>
+            <Icon name="logout" size={22}/>
+            <span style={{ fontSize:10, fontWeight:600, color:T.muted }}>Salir</span>
+          </button>
+        </nav>
+      )}
     </>
   )
 }

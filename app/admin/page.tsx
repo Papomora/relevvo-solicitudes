@@ -124,7 +124,15 @@ export default function AdminPage() {
   const [editPin, setEditPin]             = useState<Record<string,string>>({})
   const [editingPin, setEditingPin]       = useState<string|null>(null)
   const [savingPin, setSavingPin]         = useState(false)
+  const [isMobile, setIsMobile]           = useState(false)
   const [showModal, setShowModal]         = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
   const [mCliente, setMCliente]           = useState('')
   const [mTipo, setMTipo]                 = useState('')
   const [mUrgencia, setMUrgencia]         = useState('')
@@ -289,7 +297,7 @@ export default function AdminPage() {
         {/* ── SIDEBAR ── */}
         <aside style={{
           width:256, flexShrink:0, height:'100vh', position:'sticky', top:0,
-          background:T.sidebar, display:'flex', flexDirection:'column', padding:'0 12px 20px',
+          background:T.sidebar, display: isMobile ? 'none' : 'flex', flexDirection:'column', padding:'0 12px 20px',
           overflowY:'auto',
         }}>
           {/* Logo */}
@@ -359,10 +367,10 @@ export default function AdminPage() {
             background:'rgba(19,19,19,0.85)', backdropFilter:'blur(20px)',
             WebkitBackdropFilter:'blur(20px)',
             display:'flex', justifyContent:'space-between', alignItems:'center',
-            padding:'14px 32px', borderBottom:`1px solid ${T.border}`,
+            padding: isMobile ? '12px 16px' : '14px 32px', borderBottom:`1px solid ${T.border}`,
           }}>
             {/* Search */}
-            <div style={{ position:'relative', maxWidth:380, width:'100%' }}>
+            <div style={{ position:'relative', maxWidth:380, width:'100%', display: isMobile ? 'none' : 'block' }}>
               <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:T.muted, display:'flex' }}>
                 <Icon name="search" size={18}/>
               </span>
@@ -412,7 +420,7 @@ export default function AdminPage() {
           </header>
 
           {/* Content */}
-          <div style={{ flex:1, padding:'32px', overflowY:'auto' }}>
+          <div style={{ flex:1, padding: isMobile ? '20px 16px 90px' : '32px', overflowY:'auto' }}>
 
             {/* ── DASHBOARD ── */}
             {activeNav === 'dash' && (
@@ -445,7 +453,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Stat cards */}
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12 }}>
                   {STATS.map(s => (
                     <Glass key={s.label} style={{ padding:24, position:'relative', overflow:'hidden' }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
@@ -463,7 +471,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Chart + Top Clients */}
-                <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap:16 }}>
                   {/* Bar chart */}
                   <Glass style={{ padding:28, display:'flex', flexDirection:'column', height:340 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24 }}>
@@ -676,7 +684,7 @@ export default function AdminPage() {
                   <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Métricas</h2>
                   <p style={{ fontSize:13, color:T.muted }}>Rendimiento por cliente y tiempos de resolución.</p>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap:16 }}>
                   <Glass style={{ padding:28 }}>
                     <h3 style={{ fontSize:16, fontWeight:700, color:'#fff', marginBottom:4 }}>Solicitudes por cliente</h3>
                     <p style={{ fontSize:12, color:T.muted, marginBottom:20 }}>Ranking total acumulado</p>
@@ -829,6 +837,33 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+
+      {/* ── Mobile bottom nav ── */}
+      {isMobile && (
+        <nav style={{
+          position:'fixed', bottom:0, left:0, right:0, height:68,
+          background:T.sidebar, borderTop:`1px solid ${T.border}`,
+          display:'flex', alignItems:'center', justifyContent:'space-around',
+          zIndex:50, paddingBottom:'env(safe-area-inset-bottom)',
+        }}>
+          {NAV.map(n => (
+            <button key={n.id} onClick={() => setActiveNav(n.id as any)} style={{
+              display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+              padding:'6px 12px', borderRadius:10, background:'none', border:'none', cursor:'pointer',
+            }}>
+              <Icon name={n.icon} filled={activeNav===n.id} size={22}/>
+              <span style={{ fontSize:9, fontWeight:700, color: activeNav===n.id ? T.primary : T.muted, letterSpacing:'.03em', textTransform:'uppercase' }}>{n.label.slice(0,6)}</span>
+            </button>
+          ))}
+          <button onClick={() => signOut({callbackUrl:'/admin/login'})} style={{
+            display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+            padding:'6px 12px', borderRadius:10, background:'none', border:'none', cursor:'pointer',
+          }}>
+            <Icon name="logout" size={22}/>
+            <span style={{ fontSize:9, fontWeight:700, color:T.muted, letterSpacing:'.03em', textTransform:'uppercase' }}>Salir</span>
+          </button>
+        </nav>
+      )}
 
       {/* ── MODAL Nueva Solicitud ── */}
       {showModal && (
