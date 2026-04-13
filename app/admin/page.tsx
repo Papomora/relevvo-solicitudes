@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES } from '@/lib/constants'
+import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES, EQUIPO } from '@/lib/constants'
 
 type Adjunto = { url: string; name: string }
 type Solicitud = {
   id: number; cliente: string; tipo: string; urgencia: string
   descripcion: string; estado: string; nota: string | null
-  perfil: string | null; adjuntos: Adjunto[]; createdAt: string; updatedAt: string
+  perfil: string | null; asignado: string | null; adjuntos: Adjunto[]; createdAt: string; updatedAt: string
 }
 
 // ── Design tokens ──────────────────────────────────────────────
@@ -107,10 +107,12 @@ export default function AdminPage() {
   const [solicitudes, setSolicitudes]     = useState<Solicitud[]>([])
   const [filtroCliente, setFiltroCliente] = useState('todos')
   const [filtroEstado, setFiltroEstado]   = useState('todos')
+  const [filtroPerfil, setFiltroPerfil]   = useState('todos')
   const [editId, setEditId]               = useState<number | null>(null)
   const [editEstado, setEditEstado]       = useState('')
   const [editNota, setEditNota]           = useState('')
   const [editPerfil, setEditPerfil]       = useState('')
+  const [editAsignado, setEditAsignado]   = useState('')
   const [saving, setSaving]               = useState(false)
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
@@ -168,10 +170,10 @@ export default function AdminPage() {
     return () => clearInterval(iv)
   }, [lastPoll, fetchAll])
 
-  function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? ''); setEditPerfil(s.perfil ?? '') }
+  function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? ''); setEditPerfil(s.perfil ?? ''); setEditAsignado(s.asignado ?? '') }
   async function saveEdit() {
     if (!editId) return; setSaving(true)
-    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null}) })
+    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null,asignado:editAsignado||null}) })
     setSaving(false); setEditId(null); if (res.ok) fetchAll()
   }
 
@@ -201,8 +203,9 @@ export default function AdminPage() {
   const filtered = useMemo(() => solicitudes.filter(s =>
     (filtroCliente==='todos'||s.cliente===filtroCliente) &&
     (filtroEstado==='todos'||s.estado===filtroEstado) &&
+    (filtroPerfil==='todos'||s.perfil===filtroPerfil) &&
     (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
-  ), [solicitudes, filtroCliente, filtroEstado, search])
+  ), [solicitudes, filtroCliente, filtroEstado, filtroPerfil, search])
 
   // ── Clientes / PINs ───────────────────────────────────────
   const fetchClientePins = useCallback(async () => {
@@ -602,6 +605,10 @@ export default function AdminPage() {
                     <option value="todos">Todos los estados</option>
                     {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                   </select>
+                  <select value={filtroPerfil} onChange={e => setFiltroPerfil(e.target.value)} style={{ ...inputStyle, width:'auto' }}>
+                    <option value="todos">Todos los perfiles</option>
+                    {PERFILES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
                   <span style={{ fontSize:12, color:T.muted, marginLeft:'auto' }}>{filtered.length} solicitud{filtered.length!==1?'es':''}</span>
                 </div>
 
@@ -623,6 +630,11 @@ export default function AdminPage() {
                             {s.perfil && (
                               <span style={{ fontSize:10, padding:'3px 9px', borderRadius:99, fontWeight:700, textTransform:'uppercase', letterSpacing:'.07em', background:'rgba(65,229,117,0.1)', color:T.secondary }}>
                                 {s.perfil}
+                              </span>
+                            )}
+                            {s.asignado && (
+                              <span style={{ fontSize:10, padding:'3px 9px', borderRadius:99, fontWeight:700, background:'rgba(210,187,255,0.12)', color:T.primary }}>
+                                👤 {s.asignado}
                               </span>
                             )}
                             <StatusBadge estado={s.estado}/>
@@ -660,6 +672,13 @@ export default function AdminPage() {
                               <select value={editPerfil} onChange={e => setEditPerfil(e.target.value)} style={inputStyle}>
                                 <option value="">Sin asignar</option>
                                 {PERFILES.map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Asignar a</label>
+                              <select value={editAsignado} onChange={e => setEditAsignado(e.target.value)} style={inputStyle}>
+                                <option value="">Sin asignar</option>
+                                {EQUIPO.map(m => <option key={m} value={m}>{m}</option>)}
                               </select>
                             </div>
                             <div>

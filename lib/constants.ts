@@ -44,6 +44,15 @@ export const PERFILES = [
   'Estrategia',
 ]
 
+export const EQUIPO = [
+  'Camila',
+  'Daniel',
+  'Sebastián',
+  'Valeria',
+  'Mateo',
+  'Laura',
+]
+
 export const ESTADOS = [
   { value: 'pendiente',   label: 'Pendiente',   color: '#E91E8C' },
   { value: 'en_proceso',  label: 'En proceso',  color: '#7B00D4' },

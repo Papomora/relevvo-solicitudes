@@ -16,11 +16,17 @@ export async function PATCH(
 
   const id   = parseInt(params.id)
   const body = await req.json()
-  const { estado, nota, perfil } = body
+  const { estado, nota, perfil, asignado } = body
 
   const updated = await prisma.solicitud.update({
     where: { id },
-    data:  { estado, nota, ...(perfil !== undefined && { perfil }), updatedAt: new Date() },
+    data:  {
+      estado,
+      nota,
+      ...(perfil    !== undefined && { perfil }),
+      ...(asignado  !== undefined && { asignado }),
+      updatedAt: new Date(),
+    },
   })
 
   return NextResponse.json(updated)
