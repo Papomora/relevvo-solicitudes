@@ -117,7 +117,7 @@ export default function AdminPage() {
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
   const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default')
-  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'|'clientes'>('dash')
+  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'|'clientes'|'equipo'>('dash')
   const [pdfDesde, setPdfDesde]           = useState('')
   const [pdfHasta, setPdfHasta]           = useState('')
   const [pdfCliente, setPdfCliente]       = useState('todos')
@@ -129,6 +129,11 @@ export default function AdminPage() {
   const [savingPin, setSavingPin]         = useState(false)
   const [isMobile, setIsMobile]           = useState(false)
   const [showModal, setShowModal]         = useState(false)
+  const [integrantes, setIntegrantes]     = useState<{id:number;nombre:string}[]>([])
+  const [nuevoMiembro, setNuevoMiembro]   = useState('')
+  const [addingMiembro, setAddingMiembro] = useState(false)
+  const [editMiembroId, setEditMiembroId] = useState<number|null>(null)
+  const [editMiembroNombre, setEditMiembroNombre] = useState('')
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -148,7 +153,12 @@ export default function AdminPage() {
     if (res.ok) setSolicitudes(await res.json())
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  const fetchIntegrantes = useCallback(async () => {
+    const res = await fetch('/api/admin/equipo')
+    if (res.ok) setIntegrantes(await res.json())
+  }, [])
+
+  useEffect(() => { fetchAll(); fetchIntegrantes() }, [fetchAll, fetchIntegrantes])
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPerm(Notification.permission)
@@ -279,6 +289,7 @@ export default function AdminPage() {
     { id:'metricas', icon:'bar_chart',   label:'Métricas' },
     { id:'pdf',      icon:'description', label:'Reportes' },
     { id:'clientes', icon:'group',       label:'Clientes' },
+    { id:'equipo',   icon:'groups',      label:'Equipo' },
   ] as const
 
   const inputStyle: React.CSSProperties = {
@@ -541,7 +552,7 @@ export default function AdminPage() {
                     <table style={{ width:'100%', borderCollapse:'collapse' }}>
                       <thead>
                         <tr style={{ background:'rgba(255,255,255,0.02)' }}>
-                          {['ID','Cliente','Descripción','Estado','Fecha',''].map(h => (
+                          {['ID','Cliente','Descripción','Estado','Fecha','Asignado',''].map(h => (
                             <th key={h} style={{ padding:'12px 20px', textAlign:'left', fontSize:10, fontWeight:800, color:'#374151', textTransform:'uppercase', letterSpacing:'.12em', whiteSpace:'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -572,8 +583,22 @@ export default function AdminPage() {
                                 {new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}
                               </span>
                             </td>
+                            <td style={{ padding:'8px 20px' }}>
+                              <select
+                                value={s.asignado ?? ''}
+                                onChange={async e => {
+                                  const asignado = e.target.value || null
+                                  await fetch(`/api/solicitudes/${s.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ estado:s.estado, nota:s.nota, perfil:s.perfil, asignado }) })
+                                  fetchAll()
+                                }}
+                                style={{ ...inputStyle, fontSize:11, padding:'4px 8px', width:110 }}
+                              >
+                                <option value="">Sin asignar</option>
+                                {integrantes.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+                              </select>
+                            </td>
                             <td style={{ padding:'16px 20px', textAlign:'right' }}>
-                              <button onClick={() => { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota??''); setActiveNav('lista') }}
+                              <button onClick={() => { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota??''); setEditPerfil(s.perfil??''); setEditAsignado(s.asignado??''); setActiveNav('lista') }}
                                 style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, display:'flex', padding:4 }}>
                                 <Icon name="more_vert" size={18}/>
                               </button>
@@ -678,7 +703,7 @@ export default function AdminPage() {
                               <label style={labelStyle}>Asignar a</label>
                               <select value={editAsignado} onChange={e => setEditAsignado(e.target.value)} style={inputStyle}>
                                 <option value="">Sin asignar</option>
-                                {EQUIPO.map(m => <option key={m} value={m}>{m}</option>)}
+                                {integrantes.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                               </select>
                             </div>
                             <div>
@@ -831,6 +856,95 @@ export default function AdminPage() {
                   {clientePins.length === 0 && (
                     <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'32px 0' }}>Cargando clientes…</p>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ── EQUIPO ── */}
+            {activeNav === 'equipo' && (
+              <div style={{ maxWidth:560 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Equipo</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Gestiona los integrantes que pueden ser asignados a solicitudes.</p>
+                </div>
+
+                {/* Add member */}
+                <Glass style={{ padding:24, marginBottom:20 }}>
+                  <label style={labelStyle}>Agregar integrante</label>
+                  <div style={{ display:'flex', gap:10 }}>
+                    <input
+                      value={nuevoMiembro}
+                      onChange={e => setNuevoMiembro(e.target.value)}
+                      onKeyDown={async e => { if (e.key==='Enter') { e.preventDefault(); if (!nuevoMiembro.trim()) return; setAddingMiembro(true); await fetch('/api/admin/equipo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:nuevoMiembro.trim()})}); setNuevoMiembro(''); await fetchIntegrantes(); setAddingMiembro(false) } }}
+                      placeholder="Nombre del integrante…"
+                      style={{ ...inputStyle, flex:1 }}
+                    />
+                    <button
+                      disabled={addingMiembro || !nuevoMiembro.trim()}
+                      onClick={async () => {
+                        if (!nuevoMiembro.trim()) return
+                        setAddingMiembro(true)
+                        await fetch('/api/admin/equipo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:nuevoMiembro.trim() }) })
+                        setNuevoMiembro('')
+                        await fetchIntegrantes()
+                        setAddingMiembro(false)
+                      }}
+                      style={{ padding:'10px 20px', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13, opacity:addingMiembro?0.6:1 }}
+                    >
+                      {addingMiembro ? '…' : 'Agregar'}
+                    </button>
+                  </div>
+                </Glass>
+
+                {/* Member list */}
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {integrantes.length === 0 && (
+                    <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'32px 0' }}>No hay integrantes aún. Agrega el primero.</p>
+                  )}
+                  {integrantes.map(m => (
+                    <Glass key={m.id} style={{ padding:'14px 20px', display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:'rgba(124,58,237,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:T.primary, flexShrink:0 }}>
+                        {m.nombre[0].toUpperCase()}
+                      </div>
+                      {editMiembroId === m.id ? (
+                        <>
+                          <input
+                            value={editMiembroNombre}
+                            onChange={e => setEditMiembroNombre(e.target.value)}
+                            onKeyDown={async e => {
+                              if (e.key === 'Enter') {
+                                await fetch(`/api/admin/equipo/${m.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:editMiembroNombre.trim() }) })
+                                setEditMiembroId(null); fetchIntegrantes()
+                              }
+                              if (e.key === 'Escape') setEditMiembroId(null)
+                            }}
+                            style={{ ...inputStyle, flex:1, fontSize:13 }}
+                            autoFocus
+                          />
+                          <button onClick={async () => { await fetch(`/api/admin/equipo/${m.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:editMiembroNombre.trim() }) }); setEditMiembroId(null); fetchIntegrantes() }}
+                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(65,229,117,0.15)', color:T.secondary, fontWeight:700, fontSize:12 }}>
+                            Guardar
+                          </button>
+                          <button onClick={() => setEditMiembroId(null)}
+                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.05)', color:T.muted, fontWeight:700, fontSize:12 }}>
+                            Cancelar
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ flex:1, fontSize:14, fontWeight:600, color:'#fff' }}>{m.nombre}</span>
+                          <button onClick={() => { setEditMiembroId(m.id); setEditMiembroNombre(m.nombre) }}
+                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.05)', color:T.muted, fontWeight:700, fontSize:12 }}>
+                            Renombrar
+                          </button>
+                          <button onClick={async () => { await fetch(`/api/admin/equipo/${m.id}`, { method:'DELETE' }); fetchIntegrantes() }}
+                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,80,80,0.1)', color:'#F87171', fontWeight:700, fontSize:12 }}>
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+                    </Glass>
+                  ))}
                 </div>
               </div>
             )}

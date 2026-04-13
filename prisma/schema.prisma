@@ -13,6 +13,11 @@ model ClientePin {
   pin     String
 }
 
+model Integrante {
+  id     Int    @id @default(autoincrement())
+  nombre String @unique
+}
+
 model Solicitud {
   id          Int      @id @default(autoincrement())
   cliente     String
