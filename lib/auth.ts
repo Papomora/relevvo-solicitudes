@@ -18,8 +18,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!pin || pin.length !== 4) return null
 
         // Check DB first (allows runtime PIN changes)
-        const dbRecord = await prisma.clientePin.findFirst({ where: { pin } })
-        if (dbRecord) return { id: dbRecord.cliente, name: dbRecord.cliente, role: 'cliente' }
+        try {
+          const dbRecord = await prisma.clientePin.findFirst({ where: { pin } })
+          if (dbRecord) return { id: dbRecord.cliente, name: dbRecord.cliente, role: 'cliente' }
+        } catch (_) {
+          // DB unavailable — fall through to env vars
+        }
 
         // Fallback to env vars
         for (const [cliente, envKey] of Object.entries(CLIENT_PIN_MAP)) {

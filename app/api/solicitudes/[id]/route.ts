@@ -31,3 +31,18 @@ export async function PATCH(
 
   return NextResponse.json(updated)
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth()
+  const role    = (session?.user as any)?.role
+
+  if (role !== 'admin')
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+
+  const id = parseInt(params.id)
+  await prisma.solicitud.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}

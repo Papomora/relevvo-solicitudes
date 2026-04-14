@@ -180,7 +180,16 @@ export default function AdminPage() {
     return () => clearInterval(iv)
   }, [lastPoll, fetchAll])
 
+  const [deletingId, setDeletingId] = useState<number|null>(null)
+
   function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? ''); setEditPerfil(s.perfil ?? ''); setEditAsignado(s.asignado ?? '') }
+  async function deleteSolicitud(id: number) {
+    if (!confirm('¿Eliminar esta solicitud? Esta acción no se puede deshacer.')) return
+    setDeletingId(id)
+    await fetch(`/api/solicitudes/${id}`, { method: 'DELETE' })
+    setDeletingId(null)
+    fetchAll()
+  }
   async function saveEdit() {
     if (!editId) return; setSaving(true)
     const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null,asignado:editAsignado||null}) })
@@ -667,6 +676,12 @@ export default function AdminPage() {
                               fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:'pointer',
                               background:'rgba(255,255,255,0.07)', color:T.muted, fontWeight:500,
                             }}>{isEditing?'Cancelar':'Editar'}</button>
+                            {!isEditing && (
+                              <button onClick={() => deleteSolicitud(s.id)} disabled={deletingId===s.id} style={{
+                                fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:deletingId===s.id?'wait':'pointer',
+                                background:'rgba(248,113,113,0.1)', color:'#F87171', fontWeight:500, opacity:deletingId===s.id?0.5:1,
+                              }}>{deletingId===s.id?'…':'Eliminar'}</button>
+                            )}
                           </div>
                         </div>
                         <p style={{ fontSize:13, color:'rgba(229,226,225,0.5)', lineHeight:1.65 }}>{s.descripcion}</p>
