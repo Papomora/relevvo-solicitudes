@@ -11,8 +11,9 @@ type HistEntry = { role: 'user' | 'assistant'; content: string }
 
 interface AgentCreate  { type: 'create';  tipo: string; urgencia: string; descripcion: string }
 interface AgentUpdate  { type: 'update';  id: number;   campo: string;    valor: string }
+interface AgentNotify  { type: 'notify_client'; mensaje: string }
 interface AgentNone    { type: 'none' }
-type AgentAction = AgentCreate | AgentUpdate | AgentNone
+type AgentAction = AgentCreate | AgentUpdate | AgentNotify | AgentNone
 
 interface AgentResponse { reply: string; action?: AgentAction }
 
@@ -122,6 +123,8 @@ export async function handleIncomingMessage(
     finalReply = await doCreate(parsed.action, clienteActivo, restantes, cwa.limiteMes)
   } else if (parsed.action?.type === 'update') {
     finalReply = await doUpdate(parsed.action, clienteActivo, parsed.reply)
+  } else if (parsed.action?.type === 'notify_client') {
+    finalReply = await doNotifyClient(parsed.action, clienteActivo)
   }
 
   // 7. Save incoming media to most recent solicitud
@@ -191,6 +194,13 @@ async function doUpdate(a: AgentUpdate, cliente: string, defaultReply: string): 
   return defaultReply
 }
 
+async function doNotifyClient(a: AgentNotify, cliente: string): Promise<string> {
+  const cwaCliente = await prisma.clienteWA.findFirst({ where: { nombre: cliente, activo: true } })
+  if (!cwaCliente) return `❌ No encontré el número de WhatsApp de ${cliente}.`
+  await sendWA(cwaCliente.phone, a.mensaje)
+  return `✅ Mensaje enviado a ${cliente} 📲`
+}
+
 // ── System prompt ─────────────────────────────────────────────
 function buildSystem(cliente: string, activas: any[], restantes: number, limiteMes: number, isAdmin = false): string {
   const solCtx = activas.length
@@ -230,5 +240,10 @@ ACTUALIZAR ESTADO — cuando el equipo termina o avanza una tarea, usa este JSON
 ESTADOS VÁLIDOS: pendiente | en_proceso | revision | completado | cancelado
 
 También puedes actualizar urgencia, descripcion o nota — misma estructura JSON.
-Al actualizar estado, el cliente recibe automáticamente un WhatsApp de notificación.` : ''}`
+Al actualizar estado, el cliente recibe automáticamente un WhatsApp de notificación.
+
+ENVIAR MENSAJE AL CLIENTE — cuando el admin quiera avisarle algo a ${cliente}, usa este JSON:
+{"reply":"✅ Mensaje enviado a ${cliente} 📲","action":{"type":"notify_client","mensaje":"Hola ${cliente} 👋 Tu solicitud #REL-33 ya está siendo procesada. Te avisamos cuando esté lista 🚀"}}
+
+IMPORTANTE: Cuando el admin diga "indicale", "avisale", "dile", "envialo", "si envialo" — usa notify_client para enviar el mensaje DIRECTAMENTE al cliente. NO respondas el mensaje de vuelta al admin sin enviarlo.` : ''}`
 }
