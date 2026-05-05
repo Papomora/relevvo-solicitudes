@@ -111,21 +111,24 @@ export async function handleIncomingMessage(
   }
 
   const rawText = (aiMsg.content[0] as any).text ?? ''
-  let parsed: AgentResponse = { reply: rawText }
-  try {
-    const m = rawText.match(/\{[\s\S]*\}/)
-    if (m) parsed = JSON.parse(m[0])
-  } catch { /* keep rawText */ }
 
-  // 6. Execute action
-  let finalReply = parsed.reply
-  if (parsed.action?.type === 'create') {
-    finalReply = await doCreate(parsed.action, clienteActivo, restantes, cwa.limiteMes)
-  } else if (parsed.action?.type === 'update') {
-    finalReply = await doUpdate(parsed.action, clienteActivo, parsed.reply)
-  } else if (parsed.action?.type === 'notify_client') {
-    finalReply = await doNotifyClient(parsed.action, clienteActivo)
+  // Extract ALL valid JSON objects from the response (Claude may return multiple)
+  const allParsed: AgentResponse[] = extractAllJson(rawText)
+  const parsed: AgentResponse = allParsed[0] ?? { reply: rawText }
+
+  // 6. Execute all actions; use the first non-empty reply
+  let finalReply = parsed.reply || allParsed.map(p => p.reply).find(r => r) || rawText
+  for (const p of allParsed) {
+    if (p.action?.type === 'create') {
+      finalReply = await doCreate(p.action, clienteActivo, restantes, cwa.limiteMes)
+    } else if (p.action?.type === 'update') {
+      await doUpdate(p.action, clienteActivo, p.reply)
+    } else if (p.action?.type === 'notify_client') {
+      finalReply = await doNotifyClient(p.action, clienteActivo)
+    }
   }
+  // If multiple updates happened, use the reply from the first parsed block
+  if (allParsed.length > 1 && allParsed[0].reply) finalReply = allParsed[0].reply
 
   // 7. Save incoming media to most recent solicitud
   if (mediaUrl && activas.length > 0) {
@@ -150,6 +153,28 @@ export async function handleIncomingMessage(
     data: { historial: hist.slice(-20), ultimoMensaje: now },
   })
   await sendWA(phone, finalReply)
+}
+
+// ── JSON extractor (handles multiple objects in one response) ──
+function extractAllJson(text: string): AgentResponse[] {
+  const results: AgentResponse[] = []
+  let i = 0
+  while (i < text.length) {
+    const start = text.indexOf('{', i)
+    if (start === -1) break
+    let depth = 0
+    let j = start
+    for (; j < text.length; j++) {
+      if (text[j] === '{') depth++
+      else if (text[j] === '}') { depth--; if (depth === 0) break }
+    }
+    try {
+      const obj = JSON.parse(text.slice(start, j + 1))
+      if (obj && typeof obj.reply === 'string') results.push(obj as AgentResponse)
+    } catch { /* skip */ }
+    i = j + 1
+  }
+  return results
 }
 
 // ── Actions ───────────────────────────────────────────────────
