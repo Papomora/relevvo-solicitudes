@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES, EQUIPO } from '@/lib/constants'
+import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES, EQUIPO, PRESUPUESTO_CLIENTES, COSTO_TIPO } from '@/lib/constants'
 
 type Adjunto = { url: string; name: string }
 type Solicitud = {
   id: number; cliente: string; tipo: string; urgencia: string
   descripcion: string; estado: string; nota: string | null
-  perfil: string | null; asignado: string | null; adjuntos: Adjunto[]; createdAt: string; updatedAt: string
+  perfil: string | null; asignado: string | null; adjuntos: Adjunto[]
+  archivado: boolean; createdAt: string; updatedAt: string
 }
 
 // ── Design tokens ──────────────────────────────────────────────
@@ -113,6 +114,7 @@ export default function AdminPage() {
   const [editNota, setEditNota]           = useState('')
   const [editPerfil, setEditPerfil]       = useState('')
   const [editAsignado, setEditAsignado]   = useState('')
+  const [editCreatedAt, setEditCreatedAt] = useState('')
   const [saving, setSaving]               = useState(false)
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
@@ -122,11 +124,13 @@ export default function AdminPage() {
   const [pdfHasta, setPdfHasta]           = useState('')
   const [pdfCliente, setPdfCliente]       = useState('todos')
   const [search, setSearch]               = useState('')
-  const [clientePins, setClientePins]     = useState<{cliente:string;pin:string;source:string}[]>([])
+  const [clientePins, setClientePins]     = useState<{cliente:string;pin:string;source:string;presupuesto:number|null}[]>([])
   const [pinVisible, setPinVisible]       = useState<Record<string,boolean>>({})
   const [editPin, setEditPin]             = useState<Record<string,string>>({})
-  const [editingPin, setEditingPin]       = useState<string|null>(null)
-  const [savingPin, setSavingPin]         = useState(false)
+  const [editingPin, setEditingPin]         = useState<string|null>(null)
+  const [savingPin, setSavingPin]           = useState(false)
+  const [editingPresupuesto, setEditingPresupuesto] = useState<string|null>(null)
+  const [editPresupuestoVal, setEditPresupuestoVal] = useState<Record<string,string>>({})
   const [isMobile, setIsMobile]           = useState(false)
   const [showModal, setShowModal]         = useState(false)
   const [integrantes, setIntegrantes]     = useState<{id:number;nombre:string}[]>([])
@@ -180,9 +184,20 @@ export default function AdminPage() {
     return () => clearInterval(iv)
   }, [lastPoll, fetchAll])
 
-  const [deletingId, setDeletingId] = useState<number|null>(null)
+  const [deletingId, setDeletingId]       = useState<number|null>(null)
+  const [archivingId, setArchivingId]     = useState<number|null>(null)
+  const [verArchivadas, setVerArchivadas] = useState(false)
+  const [viewMode, setViewMode]           = useState<'grid'|'list'>('grid')
 
-  function openEdit(s: Solicitud) { setEditId(s.id); setEditEstado(s.estado); setEditNota(s.nota ?? ''); setEditPerfil(s.perfil ?? ''); setEditAsignado(s.asignado ?? '') }
+  function openEdit(s: Solicitud) {
+    setEditId(s.id)
+    setEditEstado(s.estado)
+    setEditNota(s.nota ?? '')
+    setEditPerfil(s.perfil ?? '')
+    setEditAsignado(s.asignado ?? '')
+    // Format for datetime-local input: "YYYY-MM-DDTHH:mm"
+    setEditCreatedAt(new Date(s.createdAt).toISOString().slice(0, 16))
+  }
   async function deleteSolicitud(id: number) {
     if (!confirm('¿Eliminar esta solicitud? Esta acción no se puede deshacer.')) return
     setDeletingId(id)
@@ -190,9 +205,19 @@ export default function AdminPage() {
     setDeletingId(null)
     fetchAll()
   }
+  async function toggleArchivar(s: Solicitud) {
+    setArchivingId(s.id)
+    await fetch(`/api/solicitudes/${s.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado: s.estado, nota: s.nota, perfil: s.perfil, asignado: s.asignado, archivado: !s.archivado }),
+    })
+    setArchivingId(null)
+    fetchAll()
+  }
   async function saveEdit() {
     if (!editId) return; setSaving(true)
-    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null,asignado:editAsignado||null}) })
+    const res = await fetch(`/api/solicitudes/${editId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado:editEstado,nota:editNota,perfil:editPerfil||null,asignado:editAsignado||null,createdAt:editCreatedAt||undefined}) })
     setSaving(false); setEditId(null); if (res.ok) fetchAll()
   }
 
@@ -210,6 +235,26 @@ export default function AdminPage() {
       .filter(m=>m.total>0).sort((a,b)=>b.total-a.total).slice(0,5)
   , [solicitudes])
 
+  const capacidadClientes = useMemo(() => {
+    const now   = new Date()
+    const mesY  = now.getFullYear()
+    const mesM  = now.getMonth()
+    const avgCosto = Object.values(COSTO_TIPO).reduce((a,b)=>a+b,0) / Object.values(COSTO_TIPO).length
+    return CLIENTES.map(c => {
+      const dbPresu    = clientePins.find(p => p.cliente === c)?.presupuesto
+      const presu      = dbPresu ?? PRESUPUESTO_CLIENTES[c] ?? 1_990_000
+      const delMes     = solicitudes.filter(s => {
+        const d = new Date(s.createdAt)
+        return s.cliente===c && d.getFullYear()===mesY && d.getMonth()===mesM
+      })
+      const usado      = delMes.reduce((acc, s) => acc + (COSTO_TIPO[s.tipo] ?? 100_000), 0)
+      const restante   = Math.max(0, presu - usado)
+      const pct        = Math.min(100, Math.round((usado / presu) * 100))
+      const solicRestantes = Math.floor(restante / avgCosto)
+      return { cliente: c, presu, usado, restante, pct, solicRestantes, totalMes: delMes.length }
+    }).filter(m => m.totalMes > 0 || m.presu > 0)
+  }, [solicitudes, clientePins])
+
   const metricasCliente = useMemo(() =>
     CLIENTES.map(c => {
       const todas = solicitudes.filter(s=>s.cliente===c)
@@ -220,11 +265,12 @@ export default function AdminPage() {
   , [solicitudes])
 
   const filtered = useMemo(() => solicitudes.filter(s =>
+    s.archivado === verArchivadas &&
     (filtroCliente==='todos'||s.cliente===filtroCliente) &&
     (filtroEstado==='todos'||s.estado===filtroEstado) &&
     (filtroPerfil==='todos'||s.perfil===filtroPerfil) &&
     (search===''||s.cliente.toLowerCase().includes(search.toLowerCase())||s.tipo.toLowerCase().includes(search.toLowerCase())||s.descripcion.toLowerCase().includes(search.toLowerCase()))
-  ), [solicitudes, filtroCliente, filtroEstado, filtroPerfil, search])
+  ), [solicitudes, verArchivadas, filtroCliente, filtroEstado, filtroPerfil, search])
 
   // ── Clientes / PINs ───────────────────────────────────────
   const fetchClientePins = useCallback(async () => {
@@ -243,6 +289,16 @@ export default function AdminPage() {
     })
     setSavingPin(false)
     if (res.ok) { setEditingPin(null); fetchClientePins() }
+  }
+
+  async function guardarPresupuesto(cliente: string) {
+    const val = editPresupuestoVal[cliente]
+    const num = parseInt(val?.replace(/\D/g,'') ?? '')
+    if (!num || num < 100_000) return
+    const res = await fetch(`/api/admin/clientes/${encodeURIComponent(cliente)}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ presupuesto: num }),
+    })
+    if (res.ok) { setEditingPresupuesto(null); fetchClientePins() }
   }
 
   // ── Admin crear solicitud ──────────────────────────────────
@@ -372,6 +428,20 @@ export default function AdminPage() {
                 <Icon name="notifications"/> Activar alertas
               </button>
             )}
+            <a href="/admin/clientes-wa" style={{
+              display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderRadius:14,
+              fontSize:13, color:T.muted, background:'transparent', fontWeight:500,
+              textDecoration:'none',
+            }}>
+              <Icon name="phone_iphone"/> Clientes WA
+            </a>
+            <a href="/admin/meta" style={{
+              display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderRadius:14,
+              fontSize:13, color:T.muted, background:'transparent', fontWeight:500,
+              textDecoration:'none',
+            }}>
+              <Icon name="bar_chart"/> Reportes Meta
+            </a>
             <button onClick={() => signOut({callbackUrl:'/admin/login'})} style={{
               display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderRadius:14,
               border:'none', cursor:'pointer', fontSize:13, color:T.muted, background:'transparent',
@@ -624,9 +694,48 @@ export default function AdminPage() {
             {/* ── LISTA ── */}
             {activeNav === 'lista' && (
               <div style={{ maxWidth:900 }}>
-                <div style={{ marginBottom:24 }}>
-                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Solicitudes</h2>
-                  <p style={{ fontSize:13, color:T.muted }}>Gestiona y actualiza el estado de cada solicitud.</p>
+                <div style={{ marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:12 }}>
+                  <div>
+                    <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>
+                      {verArchivadas ? 'Archivo' : 'Solicitudes'}
+                    </h2>
+                    <p style={{ fontSize:13, color:T.muted }}>
+                      {verArchivadas ? 'Solicitudes archivadas — solo lectura.' : 'Gestiona y actualiza el estado de cada solicitud.'}
+                    </p>
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    {/* Grid / List toggle */}
+                    <div style={{ display:'flex', borderRadius:10, overflow:'hidden', border:`1px solid ${T.borderMd}` }}>
+                      {(['grid','list'] as const).map(m => (
+                        <button key={m} onClick={() => setViewMode(m)} style={{
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          width:36, height:34, border:'none', cursor:'pointer',
+                          background: viewMode===m ? 'rgba(124,58,237,0.3)' : 'transparent',
+                          color: viewMode===m ? T.primary : T.muted,
+                          transition:'all .15s',
+                        }}>
+                          <Icon name={m==='grid' ? 'grid_view' : 'view_agenda'} size={17}/>
+                        </button>
+                      ))}
+                    </div>
+                    {/* Archive toggle */}
+                    <button
+                      onClick={() => { setVerArchivadas(v => !v); setEditId(null) }}
+                      style={{
+                        display:'flex', alignItems:'center', gap:8,
+                        padding:'9px 18px', borderRadius:12, border:'none', cursor:'pointer',
+                        background: verArchivadas ? 'rgba(210,187,255,0.12)' : 'rgba(255,255,255,0.06)',
+                        color: verArchivadas ? T.primary : T.muted,
+                        fontSize:13, fontWeight:600,
+                      }}
+                    >
+                      <Icon name={verArchivadas ? 'inbox' : 'archive'} size={16}/>
+                      {verArchivadas ? 'Ver activas' : 'Ver archivo'}
+                      <span style={{ fontSize:11, padding:'1px 7px', borderRadius:99, background:'rgba(255,255,255,0.08)', color:T.muted, marginLeft:2 }}>
+                        {solicitudes.filter(s => s.archivado === !verArchivadas).length}
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Filters */}
@@ -647,10 +756,77 @@ export default function AdminPage() {
                 </div>
 
                 {/* Cards */}
-                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div style={viewMode==='grid' ? {
+                  display:'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(290px, 1fr))',
+                  gap:14,
+                } : { display:'flex', flexDirection:'column', gap:12 }}>
                   {filtered.map(s => {
                     const urg = URGENCIAS.find(u => u.value === s.urgencia)
                     const isEditing = editId === s.id
+
+                    /* ── GRID CARD ── */
+                    if (viewMode==='grid' && !isEditing) return (
+                      <Glass key={s.id} style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:0, cursor:'default' }}>
+                        {/* Top row: ID + estado */}
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:T.primary, letterSpacing:'.06em' }}>#{String(s.id).padStart(4,'0')}</span>
+                          <StatusBadge estado={s.estado}/>
+                        </div>
+                        {/* Cliente + tipo */}
+                        <div style={{ marginBottom:8 }}>
+                          <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:'rgba(124,58,237,0.18)', color:T.primary, fontWeight:700, marginBottom:6, display:'inline-block' }}>{s.cliente}</span>
+                          <p style={{ fontSize:14, fontWeight:700, color:'#fff', lineHeight:1.3, marginTop:4 }}>{s.tipo}</p>
+                        </div>
+                        {/* Descripción truncada */}
+                        <p style={{ fontSize:12, color:'rgba(229,226,225,0.45)', lineHeight:1.6, marginBottom:12,
+                          display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' as any }}>
+                          {s.descripcion}
+                        </p>
+                        {/* Meta row */}
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:12 }}>
+                          {urg && <span style={{ fontSize:10, padding:'2px 7px', borderRadius:99, background:'rgba(255,255,255,0.06)', color:T.muted, fontWeight:500 }}>{urg.label.replace(/[🟢🟡🔴]/g,'').trim()}</span>}
+                          {s.perfil && <span style={{ fontSize:10, padding:'2px 7px', borderRadius:99, background:'rgba(65,229,117,0.1)', color:T.secondary, fontWeight:700 }}>{s.perfil}</span>}
+                          {s.asignado && <span style={{ fontSize:10, padding:'2px 7px', borderRadius:99, background:'rgba(210,187,255,0.1)', color:T.primary, fontWeight:600 }}>👤 {s.asignado}</span>}
+                        </div>
+                        {/* Date */}
+                        <p style={{ fontSize:10, color:'#374151', fontWeight:600, marginBottom:14 }}>
+                          {new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}
+                        </p>
+                        {/* Actions footer */}
+                        <div style={{ display:'flex', gap:6, borderTop:`1px solid ${T.border}`, paddingTop:12 }}>
+                          <button onClick={() => { openEdit(s); setViewMode('list') }} style={{
+                            flex:1, padding:'6px 0', borderRadius:8, border:'none', cursor:'pointer',
+                            background:'rgba(255,255,255,0.06)', color:T.muted, fontSize:11, fontWeight:600,
+                            display:'flex', alignItems:'center', justifyContent:'center', gap:4, transition:'background .15s',
+                          }}
+                            onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.1)')}
+                            onMouseLeave={e=>(e.currentTarget.style.background='rgba(255,255,255,0.06)')}
+                          >
+                            <Icon name="edit" size={13}/> Editar
+                          </button>
+                          <button onClick={() => toggleArchivar(s)} disabled={archivingId===s.id} style={{
+                            flex:1, padding:'6px 0', borderRadius:8, border:'none', cursor:'pointer',
+                            background: s.archivado ? 'rgba(65,229,117,0.08)' : 'rgba(210,187,255,0.08)',
+                            color: s.archivado ? T.secondary : T.primary, fontSize:11, fontWeight:600,
+                            display:'flex', alignItems:'center', justifyContent:'center', gap:4, transition:'background .15s',
+                            opacity: archivingId===s.id ? 0.5 : 1,
+                          }}>
+                            <Icon name={s.archivado ? 'unarchive' : 'archive'} size={13}/>
+                            {archivingId===s.id ? '…' : s.archivado ? 'Desarch.' : 'Archivar'}
+                          </button>
+                          <button onClick={() => deleteSolicitud(s.id)} disabled={deletingId===s.id} style={{
+                            width:34, padding:'6px 0', borderRadius:8, border:'none', cursor:'pointer',
+                            background:'rgba(248,113,113,0.08)', color:'#F87171', fontSize:11,
+                            display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s',
+                            opacity: deletingId===s.id ? 0.5 : 1,
+                          }}>
+                            <Icon name="delete" size={14}/>
+                          </button>
+                        </div>
+                      </Glass>
+                    )
+
                     return (
                       <Glass key={s.id} style={{ padding:'20px 24px' }}>
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
@@ -676,6 +852,23 @@ export default function AdminPage() {
                               fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:'pointer',
                               background:'rgba(255,255,255,0.07)', color:T.muted, fontWeight:500,
                             }}>{isEditing?'Cancelar':'Editar'}</button>
+                            {!isEditing && (
+                              <button
+                                onClick={() => toggleArchivar(s)}
+                                disabled={archivingId===s.id}
+                                style={{
+                                  display:'flex', alignItems:'center', gap:5,
+                                  fontSize:12, padding:'4px 12px', borderRadius:8, border:'none',
+                                  cursor: archivingId===s.id ? 'wait' : 'pointer',
+                                  background: s.archivado ? 'rgba(65,229,117,0.1)' : 'rgba(210,187,255,0.1)',
+                                  color: s.archivado ? T.secondary : T.primary,
+                                  fontWeight:500, opacity: archivingId===s.id ? 0.5 : 1,
+                                }}
+                              >
+                                <Icon name={s.archivado ? 'unarchive' : 'archive'} size={13}/>
+                                {archivingId===s.id ? '…' : s.archivado ? 'Desarchivar' : 'Archivar'}
+                              </button>
+                            )}
                             {!isEditing && (
                               <button onClick={() => deleteSolicitud(s.id)} disabled={deletingId===s.id} style={{
                                 fontSize:12, padding:'4px 12px', borderRadius:8, border:'none', cursor:deletingId===s.id?'wait':'pointer',
@@ -728,6 +921,15 @@ export default function AdminPage() {
                               </select>
                             </div>
                             <div>
+                              <label style={labelStyle}>Fecha de creación</label>
+                              <input
+                                type="datetime-local"
+                                value={editCreatedAt}
+                                onChange={e => setEditCreatedAt(e.target.value)}
+                                style={{ ...inputStyle, colorScheme:'dark' }}
+                              />
+                            </div>
+                            <div>
                               <label style={labelStyle}>Nota para el cliente</label>
                               <textarea value={editNota} onChange={e => setEditNota(e.target.value)} rows={2}
                                 placeholder="Ej: Listo para el jueves…" style={{ ...inputStyle, resize:'none', fontFamily:'inherit' }}/>
@@ -756,6 +958,68 @@ export default function AdminPage() {
                   <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Métricas</h2>
                   <p style={{ fontSize:13, color:T.muted }}>Rendimiento por cliente y tiempos de resolución.</p>
                 </div>
+                {/* ── Capacidad por plan ── */}
+                <Glass style={{ padding:28, marginBottom:16 }}>
+                  <div style={{ marginBottom:20 }}>
+                    <h3 style={{ fontSize:17, fontWeight:700, color:'#fff', letterSpacing:'-.02em', marginBottom:4 }}>Capacidad por plan — este mes</h3>
+                    <p style={{ fontSize:12, color:T.muted }}>Presupuesto usado vs disponible según tipo de solicitud</p>
+                  </div>
+                  {capacidadClientes.length === 0 ? (
+                    <p style={{ fontSize:13, color:T.muted }}>Sin solicitudes este mes aún.</p>
+                  ) : (
+                    <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap:16 }}>
+                      {capacidadClientes.map(m => {
+                        const barColor = m.pct >= 90 ? '#F87171' : m.pct >= 70 ? '#FCD34D' : T.secondary
+                        return (
+                          <div key={m.cliente} style={{ background:'rgba(255,255,255,0.03)', borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}` }}>
+                            {/* Header */}
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                              <div>
+                                <p style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:3 }}>{m.cliente}</p>
+                                <p style={{ fontSize:11, color:T.muted }}>
+                                  Presupuesto: <span style={{ color:'#fff', fontWeight:600 }}>${m.presu.toLocaleString('es-CO')}</span>/mes
+                                </p>
+                              </div>
+                              <span style={{
+                                fontSize:12, fontWeight:800, padding:'4px 10px', borderRadius:99,
+                                background: m.pct>=90 ? 'rgba(248,113,113,0.15)' : m.pct>=70 ? 'rgba(252,211,77,0.15)' : 'rgba(65,229,117,0.12)',
+                                color: barColor,
+                              }}>{m.pct}% usado</span>
+                            </div>
+                            {/* Progress bar */}
+                            <div style={{ height:6, borderRadius:99, background:'rgba(255,255,255,0.08)', marginBottom:12 }}>
+                              <div style={{ height:6, borderRadius:99, width:`${m.pct}%`, background: barColor, transition:'width .5s ease' }}/>
+                            </div>
+                            {/* Stats row */}
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:12 }}>
+                              {[
+                                { label:'Usado', value:`$${(m.usado/1000).toFixed(0)}k`, color:barColor },
+                                { label:'Restante', value:`$${(m.restante/1000).toFixed(0)}k`, color:T.secondary },
+                                { label:'Solicitudes mes', value:m.totalMes, color:T.primary },
+                              ].map(st => (
+                                <div key={st.label} style={{ textAlign:'center', background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 8px' }}>
+                                  <p style={{ fontSize:16, fontWeight:900, color:st.color as string, lineHeight:1, marginBottom:4 }}>{st.value}</p>
+                                  <p style={{ fontSize:10, color:T.muted, fontWeight:600, textTransform:'uppercase', letterSpacing:'.06em' }}>{st.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Capacity forecast */}
+                            <div style={{ borderRadius:10, padding:'10px 14px', background: m.solicRestantes > 0 ? 'rgba(65,229,117,0.06)' : 'rgba(248,113,113,0.06)', border:`1px solid ${m.solicRestantes > 0 ? 'rgba(65,229,117,0.15)' : 'rgba(248,113,113,0.15)'}` }}>
+                              {m.solicRestantes > 0 ? (
+                                <p style={{ fontSize:12, color:T.muted, lineHeight:1.5 }}>
+                                  Puede generar aprox. <span style={{ fontWeight:800, color:T.secondary, fontSize:14 }}>~{m.solicRestantes}</span> solicitudes más este mes sin exceder el plan.
+                                </p>
+                              ) : (
+                                <p style={{ fontSize:12, color:'#F87171', fontWeight:600 }}>⚠ Presupuesto mensual agotado o excedido.</p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </Glass>
+
                 <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap:16 }}>
                   <Glass style={{ padding:28 }}>
                     <h3 style={{ fontSize:16, fontWeight:700, color:'#fff', marginBottom:4 }}>Solicitudes por cliente</h3>
@@ -805,7 +1069,7 @@ export default function AdminPage() {
                   <p style={{ fontSize:13, color:T.muted }}>Visualiza y cambia el PIN de acceso de cada cliente.</p>
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {clientePins.map(({ cliente, pin, source }) => {
+                  {clientePins.map(({ cliente, pin, source, presupuesto }) => {
                     const isEditing = editingPin === cliente
                     const visible   = pinVisible[cliente]
                     return (
@@ -864,6 +1128,46 @@ export default function AdminPage() {
                               <Icon name="edit" size={14}/> Cambiar PIN
                             </button>
                           )}
+                        </div>
+
+                        {/* ── Presupuesto mensual ── */}
+                        <div style={{ width:'100%', borderTop:`1px solid ${T.border}`, marginTop:14, paddingTop:14, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                          <div>
+                            <p style={{ fontSize:11, color:T.muted, fontWeight:600, marginBottom:3, textTransform:'uppercase', letterSpacing:'.08em' }}>Presupuesto / mes</p>
+                            {editingPresupuesto === cliente ? (
+                              <input
+                                type="text" inputMode="numeric"
+                                value={editPresupuestoVal[cliente] ?? ''}
+                                onChange={e => setEditPresupuestoVal(p => ({...p,[cliente]:e.target.value.replace(/\D/g,'')}))}
+                                placeholder="Ej: 2000000"
+                                autoFocus
+                                style={{ width:140, background:T.surface, border:`1.5px solid #7C3AED`, borderRadius:8, padding:'5px 10px', fontSize:13, color:'#fff', outline:'none', fontFamily:'monospace' }}
+                              />
+                            ) : (
+                              <p style={{ fontSize:15, fontWeight:800, color:'#fff' }}>
+                                ${((presupuesto ?? PRESUPUESTO_CLIENTES[cliente] ?? 1_990_000) / 1_000_000).toFixed(presupuesto && presupuesto % 1_000_000 !== 0 ? 1 : 0)} M COP
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            {editingPresupuesto === cliente ? (
+                              <>
+                                <button onClick={() => guardarPresupuesto(cliente)} disabled={(parseInt(editPresupuestoVal[cliente]??'0')||0) < 100_000}
+                                  style={{ padding:'7px 14px', borderRadius:9, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:12, opacity:(parseInt(editPresupuestoVal[cliente]??'0')||0)<100_000?.5:1 }}>
+                                  Guardar
+                                </button>
+                                <button onClick={() => setEditingPresupuesto(null)}
+                                  style={{ padding:'7px 12px', borderRadius:9, border:'none', cursor:'pointer', background:T.surface, color:T.muted, fontSize:12 }}>
+                                  Cancelar
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={() => { setEditingPresupuesto(cliente); setEditPresupuestoVal(p => ({...p,[cliente]: String(presupuesto ?? PRESUPUESTO_CLIENTES[cliente] ?? 1_990_000)})) }}
+                                style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:9, border:'none', cursor:'pointer', background:T.surface, color:T.muted, fontSize:12, fontWeight:500 }}>
+                                <Icon name="edit" size={14}/> Editar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </Glass>
                     )

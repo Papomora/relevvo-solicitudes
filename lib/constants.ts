@@ -58,3 +58,35 @@ export const ESTADOS = [
   { value: 'en_proceso',  label: 'En proceso',  color: '#7B00D4' },
   { value: 'completada',  label: 'Completada',  color: '#16a34a' },
 ]
+
+// ── Asignación automática por tipo de solicitud ───────────────
+// Editar aquí para cambiar quién recibe cada tipo
+export const ASIGNACION: Record<string, string> = {
+  'Contenido nuevo':       'Equipo',
+  'Pauta / ads':           'Equipo',
+  'Diseño':                'Equipo',
+  'Reunión / llamada':     'Equipo',
+  'Revisión / corrección': 'Equipo',
+}
+
+// ── Presupuesto mensual por cliente (COP) ──────────────────────
+// Editar aquí cuando cambie el plan de un cliente
+export const PRESUPUESTO_CLIENTES: Record<string, number> = {
+  'ARü':                 1_990_000,
+  'Coondor':               700_000,
+  'Crusso':              2_000_000,
+  'Fresitas la Playita':   700_000,
+  'Groi':                1_990_000,
+  'Molicie':             1_990_000,
+  'Versla':              1_990_000,
+  'Visuality':           1_990_000,
+}
+
+// ── Costo estimado por tipo de solicitud (COP) ─────────────────
+export const COSTO_TIPO: Record<string, number> = {
+  'Contenido nuevo':      1_500_000,   // parrilla mensual completa
+  'Pauta / ads':            300_000,
+  'Diseño':                 100_000,
+  'Reunión / llamada':       60_000,
+  'Revisión / corrección':   50_000,
+}

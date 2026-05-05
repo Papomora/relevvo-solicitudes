@@ -8,9 +8,10 @@ datasource db {
 }
 
 model ClientePin {
-  id      Int    @id @default(autoincrement())
-  cliente String @unique
-  pin     String
+  id          Int    @id @default(autoincrement())
+  cliente     String @unique
+  pin         String
+  presupuesto Int?
 }
 
 model Integrante {
@@ -19,16 +20,46 @@ model Integrante {
 }
 
 model Solicitud {
-  id          Int      @id @default(autoincrement())
-  cliente     String
-  tipo        String
-  urgencia    String
-  descripcion String
-  estado      String   @default("pendiente")
-  nota        String?
-  perfil      String?
-  asignado    String?
-  adjuntos    Json     @default("[]")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 Int       @id @default(autoincrement())
+  cliente            String
+  tipo               String
+  urgencia           String
+  descripcion        String
+  estado             String    @default("pendiente")
+  nota               String?
+  perfil             String?
+  asignado           String?
+  adjuntos           Json      @default("[]")
+  archivado          Boolean   @default(false)
+  ultimoRecordatorio DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+// ── Rate limiting ─────────────────────────────────────────────
+model RateLimit {
+  id      Int      @id @default(autoincrement())
+  key     String   @unique   // e.g. "pin:1.2.3.4"
+  count   Int      @default(0)
+  resetAt DateTime
+}
+
+// ── WhatsApp Agent ───────────────────────────────────────────
+model ClienteWA {
+  id            Int       @id @default(autoincrement())
+  phone         String    @unique   // +573001234567
+  nombre        String              // debe coincidir con Solicitud.cliente
+  activo        Boolean   @default(true)
+  limiteMes     Int       @default(10)
+  ultimoCheckIn DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model WaSession {
+  id            Int      @id @default(autoincrement())
+  phone         String   @unique
+  cliente       String   @default("")
+  historial     Json     @default("[]")   // [{ role, content }]
+  ultimoMensaje DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

@@ -12,8 +12,8 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const dbPins = await prisma.clientePin.findMany()
-  const dbMap: Record<string, string> = {}
-  dbPins.forEach(r => { dbMap[r.cliente] = r.pin })
+  const dbMap: Record<string, { pin: string; presupuesto: number | null }> = {}
+  dbPins.forEach(r => { dbMap[r.cliente] = { pin: r.pin, presupuesto: r.presupuesto ?? null } })
 
   const result = CLIENTES.map(cliente => {
     const envKey = CLIENT_PIN_MAP[cliente]
@@ -21,8 +21,9 @@ export async function GET() {
     const fromEnv = process.env[envKey] ?? ''
     return {
       cliente,
-      pin:    fromDB ?? fromEnv,
-      source: fromDB ? 'db' : 'env',
+      pin:         fromDB?.pin ?? fromEnv,
+      source:      fromDB ? 'db' : 'env',
+      presupuesto: fromDB?.presupuesto ?? null,
     }
   })
 

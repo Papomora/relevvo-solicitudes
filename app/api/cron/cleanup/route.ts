@@ -3,13 +3,21 @@ import { list, del } from '@vercel/blob'
 
 export const runtime = 'nodejs'
 
+function verifyCron(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  const provided = req.headers.get('authorization') ?? ''
+  const expected = `Bearer ${secret}`
+  // timing-safe comparison — prevent timing attacks
+  if (provided.length !== expected.length) return false
+  const { timingSafeEqual } = require('crypto') as typeof import('crypto')
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+}
+
 export async function GET(req: NextRequest) {
-  // Protect cron: Vercel sends Authorization: Bearer <CRON_SECRET>
-  if (process.env.NODE_ENV !== 'development') {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  // Always verify — never skip in development
+  if (!verifyCron(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000)

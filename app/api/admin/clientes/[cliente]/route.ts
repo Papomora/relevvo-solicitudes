@@ -18,14 +18,22 @@ export async function PATCH(
   if (!CLIENTES.includes(cliente))
     return NextResponse.json({ error: 'Cliente inválido' }, { status: 400 })
 
-  const { pin } = await req.json()
-  if (!pin || !/^\d{4}$/.test(pin))
+  const body = await req.json()
+  const { pin, presupuesto } = body
+
+  if (pin !== undefined && !/^\d{4}$/.test(pin))
     return NextResponse.json({ error: 'PIN debe ser 4 dígitos' }, { status: 400 })
+
+  const existing = await prisma.clientePin.findUnique({ where: { cliente } })
+  const currentPin = existing?.pin ?? '0000'
 
   await prisma.clientePin.upsert({
     where:  { cliente },
-    update: { pin },
-    create: { cliente, pin },
+    update: {
+      ...(pin         !== undefined && { pin }),
+      ...(presupuesto !== undefined && { presupuesto: presupuesto === null ? null : Number(presupuesto) }),
+    },
+    create: { cliente, pin: pin ?? currentPin, presupuesto: presupuesto ? Number(presupuesto) : null },
   })
 
   return NextResponse.json({ ok: true })

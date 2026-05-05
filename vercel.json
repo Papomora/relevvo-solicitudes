@@ -1,8 +1,18 @@
 {
   "crons": [
+    { "path": "/api/cron/cleanup",          "schedule": "0 6 * * *"      },
+    { "path": "/api/cron/recordatorios",    "schedule": "0 14 * * 1-5"   },
+    { "path": "/api/cron/check-in",         "schedule": "0 14 * * 1-5"   },
+    { "path": "/api/cron/limites",          "schedule": "0 15 * * *"     },
+    { "path": "/api/cron/reporte-mensual",  "schedule": "0 13 1 * *"     }
+  ],
+  "headers": [
     {
-      "path": "/api/cron/cleanup",
-      "schedule": "0 6 * * *"
+      "source": "/reportes/(.*)\\.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Pragma", "value": "no-cache" }
+      ]
     }
   ]
 }

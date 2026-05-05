@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { notifyTeam } from '@/lib/team-notify'
+import { ASIGNACION } from '@/lib/constants'
 
 export const runtime = 'nodejs'
 
-// ── WhatsApp via CallMeBot ─────────────────────────────────────
-// Env: WHATSAPP_PHONE_1 / WHATSAPP_APIKEY_1  (up to 3 recipients)
-async function sendWhatsAppAlerts(s: { cliente: string; tipo: string; urgencia: string }) {
-  const urgLabel = s.urgencia === 'alta' ? '🔴 Alta' : s.urgencia === 'media' ? '🟡 Media' : '🟢 Baja'
-  const text = encodeURIComponent(
-    `🔔 *Nueva solicitud — Relevvo Portal*\n\n👤 Cliente: ${s.cliente}\n📋 Tipo: ${s.tipo}\n⚡ Prioridad: ${urgLabel}\n\nRevisa el panel de admin para más detalles.`
-  )
-  for (let i = 1; i <= 3; i++) {
-    const phone  = process.env[`WHATSAPP_PHONE_${i}`]
-    const apikey = process.env[`WHATSAPP_APIKEY_${i}`]
-    if (!phone || !apikey) continue
-    await fetch(`https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${text}&apikey=${apikey}`)
-  }
+function isInternalRequest(req: NextRequest): string | null {
+  const secret  = process.env.INTERNAL_SECRET
+  const header  = req.headers.get('x-internal-secret')
+  if (!secret || !header || header.trim() !== secret.trim()) return null
+  return req.headers.get('x-internal-cliente') // returns client name or null
 }
 
 export async function GET() {
@@ -37,15 +31,22 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  // Allow internal calls (from WhatsApp agent) bypassing session auth
+  const internalCliente = isInternalRequest(req)
 
-  const role = (session.user as any)?.role
-  if (role === 'admin') return NextResponse.json({ error: 'Admin no puede enviar solicitudes' }, { status: 403 })
+  let cliente: string
+  if (internalCliente) {
+    cliente = internalCliente
+  } else {
+    const session = await auth()
+    if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const role = (session.user as any)?.role
+    if (role === 'admin') return NextResponse.json({ error: 'Admin no puede enviar solicitudes' }, { status: 403 })
+    cliente = session.user?.name ?? ''
+  }
 
   const body = await req.json()
   const { tipo, urgencia, descripcion, adjuntos } = body
-  const cliente = session.user?.name ?? ''
 
   if (!tipo || !urgencia || !descripcion)
     return NextResponse.json({ error: 'Campos requeridos' }, { status: 400 })
@@ -54,8 +55,9 @@ export async function POST(req: NextRequest) {
     data: { cliente, tipo, urgencia, descripcion, adjuntos: adjuntos ?? [] },
   })
 
-  // WhatsApp alerts (fire-and-forget)
-  sendWhatsAppAlerts(nueva).catch(() => {})
+  // Rich team notification (fire-and-forget)
+  const asig = ASIGNACION[tipo] ?? 'Equipo'
+  notifyTeam({ id: nueva.id, cliente, tipo, urgencia, descripcion, asignado: asig }).catch(() => {})
 
   return NextResponse.json(nueva, { status: 201 })
 }
