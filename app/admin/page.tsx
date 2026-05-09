@@ -119,7 +119,7 @@ export default function AdminPage() {
   const [lastPoll, setLastPoll]           = useState(new Date().toISOString())
   const [nuevas, setNuevas]               = useState(0)
   const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default')
-  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'|'clientes'|'equipo'>('dash')
+  const [activeNav, setActiveNav]         = useState<'dash'|'lista'|'metricas'|'pdf'|'clientes'|'equipo'|'prospectos'>('dash')
   const [pdfDesde, setPdfDesde]           = useState('')
   const [pdfHasta, setPdfHasta]           = useState('')
   const [pdfCliente, setPdfCliente]       = useState('todos')
@@ -133,11 +133,17 @@ export default function AdminPage() {
   const [editPresupuestoVal, setEditPresupuestoVal] = useState<Record<string,string>>({})
   const [isMobile, setIsMobile]           = useState(false)
   const [showModal, setShowModal]         = useState(false)
-  const [integrantes, setIntegrantes]     = useState<{id:number;nombre:string}[]>([])
+  const [integrantes, setIntegrantes]     = useState<{id:number;nombre:string;phone?:string|null}[]>([])
   const [nuevoMiembro, setNuevoMiembro]   = useState('')
+  const [nuevoPhone, setNuevoPhone]       = useState('')
   const [addingMiembro, setAddingMiembro] = useState(false)
   const [editMiembroId, setEditMiembroId] = useState<number|null>(null)
   const [editMiembroNombre, setEditMiembroNombre] = useState('')
+  const [editMiembroPhone, setEditMiembroPhone]   = useState('')
+  const [prospectoPhone, setProspectoPhone]       = useState('')
+  const [prospectoNombre, setProspectoNombre]     = useState('')
+  const [sendingProspecto, setSendingProspecto]   = useState(false)
+  const [prospectoOk, setProspectoOk]             = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -354,7 +360,8 @@ export default function AdminPage() {
     { id:'metricas', icon:'bar_chart',   label:'Métricas' },
     { id:'pdf',      icon:'description', label:'Reportes' },
     { id:'clientes', icon:'group',       label:'Clientes' },
-    { id:'equipo',   icon:'groups',      label:'Equipo' },
+    { id:'equipo',      icon:'groups',      label:'Equipo' },
+    { id:'prospectos',  icon:'send',        label:'Prospectos' },
   ] as const
 
   const inputStyle: React.CSSProperties = {
@@ -1190,12 +1197,17 @@ export default function AdminPage() {
                 {/* Add member */}
                 <Glass style={{ padding:24, marginBottom:20 }}>
                   <label style={labelStyle}>Agregar integrante</label>
-                  <div style={{ display:'flex', gap:10 }}>
+                  <div style={{ display:'flex', gap:10, marginBottom:10 }}>
                     <input
                       value={nuevoMiembro}
                       onChange={e => setNuevoMiembro(e.target.value)}
-                      onKeyDown={async e => { if (e.key==='Enter') { e.preventDefault(); if (!nuevoMiembro.trim()) return; setAddingMiembro(true); await fetch('/api/admin/equipo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:nuevoMiembro.trim()})}); setNuevoMiembro(''); await fetchIntegrantes(); setAddingMiembro(false) } }}
-                      placeholder="Nombre del integrante…"
+                      placeholder="Nombre…"
+                      style={{ ...inputStyle, flex:1 }}
+                    />
+                    <input
+                      value={nuevoPhone}
+                      onChange={e => setNuevoPhone(e.target.value)}
+                      placeholder="+573001234567"
                       style={{ ...inputStyle, flex:1 }}
                     />
                     <button
@@ -1203,12 +1215,12 @@ export default function AdminPage() {
                       onClick={async () => {
                         if (!nuevoMiembro.trim()) return
                         setAddingMiembro(true)
-                        await fetch('/api/admin/equipo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:nuevoMiembro.trim() }) })
-                        setNuevoMiembro('')
+                        await fetch('/api/admin/equipo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:nuevoMiembro.trim(), phone:nuevoPhone.trim()||null }) })
+                        setNuevoMiembro(''); setNuevoPhone('')
                         await fetchIntegrantes()
                         setAddingMiembro(false)
                       }}
-                      style={{ padding:'10px 20px', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13, opacity:addingMiembro?0.6:1 }}
+                      style={{ padding:'10px 20px', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13, opacity:addingMiembro?0.6:1, whiteSpace:'nowrap' }}
                     >
                       {addingMiembro ? '…' : 'Agregar'}
                     </button>
@@ -1226,35 +1238,26 @@ export default function AdminPage() {
                         {m.nombre[0].toUpperCase()}
                       </div>
                       {editMiembroId === m.id ? (
-                        <>
-                          <input
-                            value={editMiembroNombre}
-                            onChange={e => setEditMiembroNombre(e.target.value)}
-                            onKeyDown={async e => {
-                              if (e.key === 'Enter') {
-                                await fetch(`/api/admin/equipo/${m.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:editMiembroNombre.trim() }) })
-                                setEditMiembroId(null); fetchIntegrantes()
-                              }
-                              if (e.key === 'Escape') setEditMiembroId(null)
-                            }}
-                            style={{ ...inputStyle, flex:1, fontSize:13 }}
-                            autoFocus
-                          />
-                          <button onClick={async () => { await fetch(`/api/admin/equipo/${m.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:editMiembroNombre.trim() }) }); setEditMiembroId(null); fetchIntegrantes() }}
-                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(65,229,117,0.15)', color:T.secondary, fontWeight:700, fontSize:12 }}>
-                            Guardar
-                          </button>
-                          <button onClick={() => setEditMiembroId(null)}
-                            style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.05)', color:T.muted, fontWeight:700, fontSize:12 }}>
-                            Cancelar
-                          </button>
-                        </>
+                        <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8 }}>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <input value={editMiembroNombre} onChange={e => setEditMiembroNombre(e.target.value)} placeholder="Nombre" style={{ ...inputStyle, flex:1, fontSize:13 }} autoFocus />
+                            <input value={editMiembroPhone} onChange={e => setEditMiembroPhone(e.target.value)} placeholder="+573001234567" style={{ ...inputStyle, flex:1, fontSize:13 }} />
+                          </div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <button onClick={async () => { await fetch(`/api/admin/equipo/${m.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ nombre:editMiembroNombre.trim(), phone:editMiembroPhone.trim()||null }) }); setEditMiembroId(null); fetchIntegrantes() }}
+                              style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(65,229,117,0.15)', color:T.secondary, fontWeight:700, fontSize:12 }}>Guardar</button>
+                            <button onClick={() => setEditMiembroId(null)} style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.05)', color:T.muted, fontWeight:700, fontSize:12 }}>Cancelar</button>
+                          </div>
+                        </div>
                       ) : (
                         <>
-                          <span style={{ flex:1, fontSize:14, fontWeight:600, color:'#fff' }}>{m.nombre}</span>
-                          <button onClick={() => { setEditMiembroId(m.id); setEditMiembroNombre(m.nombre) }}
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>{m.nombre}</div>
+                            {m.phone && <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>📱 {m.phone}</div>}
+                          </div>
+                          <button onClick={() => { setEditMiembroId(m.id); setEditMiembroNombre(m.nombre); setEditMiembroPhone(m.phone??'') }}
                             style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.05)', color:T.muted, fontWeight:700, fontSize:12 }}>
-                            Renombrar
+                            Editar
                           </button>
                           <button onClick={async () => { await fetch(`/api/admin/equipo/${m.id}`, { method:'DELETE' }); fetchIntegrantes() }}
                             style={{ padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', background:'rgba(255,80,80,0.1)', color:'#F87171', fontWeight:700, fontSize:12 }}>
@@ -1265,6 +1268,55 @@ export default function AdminPage() {
                     </Glass>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* ── PROSPECTOS ── */}
+            {activeNav === 'prospectos' && (
+              <div style={{ maxWidth:520 }}>
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Prospectos</h2>
+                  <p style={{ fontSize:13, color:T.muted }}>Envía un mensaje de WhatsApp a un prospecto invitándolo a trabajar con Relevvo.</p>
+                </div>
+                <Glass style={{ padding:24 }}>
+                  <label style={labelStyle}>Número de WhatsApp</label>
+                  <input
+                    value={prospectoPhone}
+                    onChange={e => setProspectoPhone(e.target.value)}
+                    placeholder="+573001234567"
+                    style={{ ...inputStyle, marginBottom:14 }}
+                  />
+                  <label style={labelStyle}>Nombre (opcional)</label>
+                  <input
+                    value={prospectoNombre}
+                    onChange={e => setProspectoNombre(e.target.value)}
+                    placeholder="Ej: El Rincón Vegano"
+                    style={{ ...inputStyle, marginBottom:20 }}
+                  />
+                  <div style={{ padding:'14px 16px', borderRadius:12, background:'rgba(124,58,237,0.08)', border:'1px solid rgba(124,58,237,0.2)', fontSize:13, color:T.muted, marginBottom:20, lineHeight:1.6 }}>
+                    📨 <strong style={{ color:'#fff' }}>Mensaje que recibirán:</strong><br/>
+                    "Hola <em>{prospectoNombre || 'amig@'}</em> 👋 Somos <strong>Relevvo Studio</strong>, agencia creativa. Más allá de nuestros planes, ahora nos adaptamos a tu presupuesto. ¿Te cuento cómo? 🚀"
+                  </div>
+                  {prospectoOk && <p style={{ fontSize:13, color:T.secondary, marginBottom:12 }}>✅ Mensaje enviado exitosamente.</p>}
+                  <button
+                    disabled={sendingProspecto || !prospectoPhone.trim()}
+                    onClick={async () => {
+                      setSendingProspecto(true); setProspectoOk(false)
+                      const res = await fetch('/api/whatsapp/prospecto', {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({ phone: prospectoPhone.trim(), nombre: prospectoNombre.trim() }),
+                      })
+                      setSendingProspecto(false)
+                      if (res.ok) { setProspectoOk(true); setProspectoPhone(''); setProspectoNombre('') }
+                    }}
+                    style={{ width:'100%', padding:'12px 0', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:14, opacity:(sendingProspecto||!prospectoPhone.trim())?0.5:1 }}
+                  >
+                    {sendingProspecto ? 'Enviando…' : '📤 Enviar mensaje'}
+                  </button>
+                  <p style={{ fontSize:11, color:T.muted, marginTop:12, textAlign:'center' }}>
+                    Requiere template <code>relevvo_prospecto</code> aprobado en Meta Business Manager.
+                  </p>
+                </Glass>
               </div>
             )}
 
