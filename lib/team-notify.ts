@@ -1,6 +1,24 @@
 import { sendWA } from './whatsapp-send'
 import { ASIGNACION } from './constants'
 
+// Notify a specific team member when they are assigned to a task
+export async function notifyIntegrante(
+  integrante: { nombre: string; phone?: string | null },
+  sol: { id: number; cliente: string; tipo: string; urgencia: string; descripcion: string }
+): Promise<void> {
+  if (!integrante.phone) return
+  const urg = sol.urgencia === 'alta' ? '🔴 Alta' : sol.urgencia === 'media' ? '🟡 Media' : '🟢 Baja'
+  const desc = sol.descripcion.slice(0, 100) + (sol.descripcion.length > 100 ? '...' : '')
+  const msg =
+    `👋 Hola ${integrante.nombre}!\n\n` +
+    `📋 Te asignaron una tarea:\n\n` +
+    `🆔 #REL-${sol.id} · ${sol.tipo} · ${urg}\n` +
+    `👤 Cliente: ${sol.cliente}\n` +
+    `📝 "${desc}"\n\n` +
+    `🔗 solicitudes.relevvostudio.com/admin`
+  await sendWA(integrante.phone, msg).catch(() => {})
+}
+
 // Phones that receive team alerts — comma-separated in TEAM_ALERT_PHONES env var
 // e.g. "573223094005,573001234567"
 function getTeamPhones(): string[] {

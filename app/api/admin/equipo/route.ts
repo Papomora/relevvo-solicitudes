@@ -20,10 +20,12 @@ export async function POST(req: NextRequest) {
   if (!session || role !== 'admin')
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { nombre } = await req.json()
+  const { nombre, phone } = await req.json()
   if (!nombre?.trim())
     return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
 
-  const integrante = await prisma.integrante.create({ data: { nombre: nombre.trim() } })
+  const integrante = await prisma.integrante.create({
+    data: { nombre: nombre.trim(), phone: phone?.trim() || null },
+  })
   return NextResponse.json(integrante, { status: 201 })
 }

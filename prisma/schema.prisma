@@ -15,8 +15,9 @@ model ClientePin {
 }
 
 model Integrante {
-  id     Int    @id @default(autoincrement())
-  nombre String @unique
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+  phone  String?
 }
 
 model Solicitud {
