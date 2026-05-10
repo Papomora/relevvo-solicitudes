@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { sendWA } from '@/lib/whatsapp-send'
 
 export const runtime = 'nodejs'
 
@@ -27,5 +28,15 @@ export async function POST(req: NextRequest) {
   const integrante = await prisma.integrante.create({
     data: { nombre: nombre.trim(), phone: phone?.trim() || null },
   })
+
+  // Welcome message via WA
+  if (integrante.phone) {
+    const msg =
+      `Hola ${integrante.nombre} 👋 Bienvenid@ al equipo de *Relevvo Studio*.\n\n` +
+      `Desde ahora recibirás notificaciones aquí cuando se te asigne una tarea.\n\n` +
+      `🔗 Panel: solicitudes.relevvostudio.com/admin`
+    sendWA(integrante.phone, msg).catch(() => {})
+  }
+
   return NextResponse.json(integrante, { status: 201 })
 }
