@@ -151,6 +151,7 @@ export default function AdminPage() {
   const [prospectoNombre, setProspectoNombre]     = useState('')
   const [sendingProspecto, setSendingProspecto]   = useState(false)
   const [prospectoOk, setProspectoOk]             = useState(false)
+  const [prospectoErr, setProspectoErr]           = useState('')
   const [prospectos, setProspectos]               = useState<ProspectoItem[]>([])
 
   useEffect(() => {
@@ -1322,14 +1323,23 @@ export default function AdminPage() {
                     <div style={{ padding:'12px 16px', borderRadius:12, background:'rgba(124,58,237,0.08)', border:'1px solid rgba(124,58,237,0.2)', fontSize:12, color:T.muted, marginBottom:16, lineHeight:1.6 }}>
                       📨 &quot;Hola <em>{prospectoNombre||'amig@'}</em> 👋 Somos <strong style={{color:'#fff'}}>Relevvo Studio</strong>…&quot;
                     </div>
-                    {prospectoOk && <p style={{ fontSize:13, color:T.secondary, marginBottom:10 }}>✅ Mensaje enviado.</p>}
+                    {prospectoOk && <p style={{ fontSize:13, color:T.secondary, marginBottom:10 }}>✅ Mensaje enviado correctamente.</p>}
+                    {prospectoErr && <p style={{ fontSize:12, color:'#F87171', marginBottom:10, padding:'8px 12px', borderRadius:8, background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)' }}>❌ {prospectoErr}</p>}
                     <button
                       disabled={sendingProspecto||!prospectoPhone.trim()}
                       onClick={async()=>{
-                        setSendingProspecto(true); setProspectoOk(false)
+                        setSendingProspecto(true); setProspectoOk(false); setProspectoErr('')
                         const res = await fetch('/api/whatsapp/prospecto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:prospectoPhone.trim(),nombre:prospectoNombre.trim()})})
                         setSendingProspecto(false)
-                        if(res.ok){setProspectoOk(true);setProspectoPhone('');setProspectoNombre('');fetchProspectos()}
+                        if(res.ok){
+                          const data = await res.json()
+                          setProspectoOk(true)
+                          setProspectoPhone('');setProspectoNombre('');fetchProspectos()
+                          if(!data.whatsapp) setProspectoErr('Guardado en DB pero WhatsApp no confirmó envío. Verifica el template en Meta.')
+                        } else {
+                          const data = await res.json().catch(()=>({}))
+                          setProspectoErr(data.error ?? `Error ${res.status}` + (data.detail ? `: ${data.detail}` : ''))
+                        }
                       }}
                       style={{ padding:'10px 24px', borderRadius:10, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13, opacity:(sendingProspecto||!prospectoPhone.trim())?0.5:1 }}
                     >

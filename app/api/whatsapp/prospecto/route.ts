@@ -43,31 +43,38 @@ export async function POST(req: NextRequest) {
 
   const now = new Date()
 
-  // Upsert ProspectoSession — reset if previously existed
-  await prisma.prospectoSession.upsert({
-    where:  { phone: normalized },
-    create: {
-      phone:      normalized,
-      nombre:     nombreClean !== 'amig@' ? nombreClean : null,
-      messageId:  msgId,
-      enviadoAt:  now,
-      historial:  [],
-    },
-    update: {
-      nombre:      nombreClean !== 'amig@' ? nombreClean : undefined,
-      messageId:   msgId,
-      enviadoAt:   now,
-      estado:      'activo',
-      entregado:   false,
-      leido:       false,
-      respondioAt: null,
-      completadoAt:null,
-      followUp1At: null,
-      followUp2At: null,
-      historial:   [],
-      brief:       null,
-    },
-  })
+  try {
+    await prisma.prospectoSession.upsert({
+      where:  { phone: normalized },
+      create: {
+        phone:      normalized,
+        nombre:     nombreClean !== 'amig@' ? nombreClean : null,
+        messageId:  msgId,
+        enviadoAt:  now,
+        historial:  [],
+      },
+      update: {
+        nombre:      nombreClean !== 'amig@' ? nombreClean : undefined,
+        messageId:   msgId,
+        enviadoAt:   now,
+        estado:      'activo',
+        entregado:   false,
+        leido:       false,
+        respondioAt: null,
+        completadoAt:null,
+        followUp1At: null,
+        followUp2At: null,
+        historial:   [],
+        brief:       null,
+      },
+    })
+  } catch (e: any) {
+    console.error('[prospecto POST] upsert failed:', e)
+    return NextResponse.json(
+      { error: 'Error al guardar en base de datos', detail: e?.message ?? String(e) },
+      { status: 500 }
+    )
+  }
 
-  return NextResponse.json({ ok: true, phone: normalized, messageId: msgId })
+  return NextResponse.json({ ok: true, phone: normalized, messageId: msgId, whatsapp: !!msgId })
 }
