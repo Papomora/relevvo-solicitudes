@@ -56,6 +56,16 @@ model ClienteWA {
   createdAt     DateTime  @default(now())
 }
 
+model ProspectoSession {
+  id            Int      @id @default(autoincrement())
+  phone         String   @unique
+  historial     Json     @default("[]")
+  estado        String   @default("activo")  // activo | completado | cancelado
+  brief         String?
+  ultimoMensaje DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
 model WaSession {
   id            Int      @id @default(autoincrement())
   phone         String   @unique

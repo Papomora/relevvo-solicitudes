@@ -4,6 +4,7 @@ import { sendWA } from './whatsapp-send'
 import { notifyTeam, notifyClienteEstado } from './team-notify'
 import { ASIGNACION, CLIENTES } from './constants'
 import { uploadMediaToDrive } from './google-drive'
+import { handleProspectoMessage } from './prospecto-agent'
 
 type MediaInfo = { url: string; mimeType: string; ext: string }
 
@@ -24,13 +25,10 @@ interface AgentResponse { reply: string; action?: AgentAction }
 export async function handleIncomingMessage(
   phone: string, text: string, media?: MediaInfo
 ): Promise<void> {
-  // 1. Verify registered client
+  // 1. Verify registered client — route unregistered to prospecto agent
   const cwa = await prisma.clienteWA.findUnique({ where: { phone } })
   if (!cwa || !cwa.activo) {
-    await sendWA(phone,
-      '¡Hola! 👋 No tienes acceso registrado todavía.\n' +
-      'Escríbenos a hola@relevvostudio.com para activar tu acceso 😊'
-    )
+    await handleProspectoMessage(phone, text)
     return
   }
 
