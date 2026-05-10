@@ -94,6 +94,21 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
   )
 }
 
+// ── Prospecto helpers ──────────────────────────────────────────
+const PROSPECTO_STEPS = [
+  { key:'enviado',   label:'Enviado',   check:(p:ProspectoItem)=>!!p.enviadoAt },
+  { key:'entregado', label:'Entregado', check:(p:ProspectoItem)=>p.entregado },
+  { key:'leido',     label:'Leído',     check:(p:ProspectoItem)=>p.leido },
+  { key:'respondio', label:'Respondió', check:(p:ProspectoItem)=>!!p.respondioAt },
+  { key:'brief',     label:'Brief ✓',   check:(p:ProspectoItem)=>!!p.completadoAt },
+]
+function prospectoStepsDone(p:ProspectoItem){ return PROSPECTO_STEPS.filter(s=>s.check(p)).length }
+function fmtProspectoDate(iso:string|null){
+  if(!iso) return null
+  const d=new Date(iso)
+  return d.toLocaleDateString('es-CO',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
+}
+
 // ── Status badge ───────────────────────────────────────────────
 function StatusBadge({ estado }: { estado: string }) {
   const info = ESTADOS.find(s => s.value === estado) ?? ESTADOS[0]
@@ -1287,21 +1302,7 @@ export default function AdminPage() {
             )}
 
             {/* ── PROSPECTOS ── */}
-            {activeNav === 'prospectos' && (() => {
-              const STEPS = [
-                { key:'enviado',    label:'Enviado',   check:(p:ProspectoItem)=>!!p.enviadoAt },
-                { key:'entregado',  label:'Entregado', check:(p:ProspectoItem)=>p.entregado },
-                { key:'leido',      label:'Leído',     check:(p:ProspectoItem)=>p.leido },
-                { key:'respondio',  label:'Respondió', check:(p:ProspectoItem)=>!!p.respondioAt },
-                { key:'brief',      label:'Brief ✓',   check:(p:ProspectoItem)=>!!p.completadoAt },
-              ]
-              function stepsDone(p: ProspectoItem) { return STEPS.filter(s=>s.check(p)).length }
-              function fmtDate(iso:string|null) {
-                if (!iso) return null
-                const d = new Date(iso)
-                return d.toLocaleDateString('es-CO',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
-              }
-              return (
+            {activeNav === 'prospectos' && (
                 <div style={{ maxWidth:720 }}>
                   <div style={{ marginBottom:24 }}>
                     <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Prospectos</h2>
@@ -1370,11 +1371,11 @@ export default function AdminPage() {
                       <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'40px 0' }}>No hay prospectos aún. Envía el primer mensaje arriba.</p>
                     )}
                     {[...prospectos].sort((a,b)=>new Date(b.enviadoAt??b.createdAt??0).getTime()-new Date(a.enviadoAt??a.createdAt??0).getTime()).map(p=>{
-                      const done  = stepsDone(p)
-                      const total = STEPS.length
-                      const pct   = Math.round((done/total)*100)
+                      const done  = prospectoStepsDone(p)
+                      const pct   = Math.round((done/PROSPECTO_STEPS.length)*100)
                       const isComplete = !!p.completadoAt
-                      const brief = p.brief ? (() => { try { return JSON.parse(p.brief) } catch { return null } })() : null
+                      let brief:any = null
+                      try { if(p.brief) brief = JSON.parse(p.brief) } catch { brief = null }
                       return (
                         <Glass key={p.id} style={{ padding:'18px 20px' }}>
                           {/* Header row */}
@@ -1389,11 +1390,10 @@ export default function AdminPage() {
                               </div>
                             </div>
                             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                              {/* delivery icons */}
                               <span title={p.entregado?'Entregado':'No entregado aún'} style={{ fontSize:11, color:p.entregado?T.secondary:T.muted }}>
                                 {p.entregado?'✓ entregado':'⏳'}
                               </span>
-                              {p.leido && <span title="Leído" style={{ fontSize:11, color:'#60A5FA' }}>👁 leído</span>}
+                              {p.leido && <span style={{ fontSize:11, color:'#60A5FA' }}>👁 leído</span>}
                               <span style={{
                                 padding:'3px 10px', borderRadius:999, fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'.08em',
                                 background: isComplete ? 'rgba(65,229,117,0.12)' : done===0 ? 'rgba(255,255,255,0.05)' : 'rgba(124,58,237,0.12)',
@@ -1408,9 +1408,9 @@ export default function AdminPage() {
                           {/* Progress bar */}
                           <div style={{ marginBottom:12 }}>
                             <div style={{ display:'flex', gap:3, marginBottom:6 }}>
-                              {STEPS.map((s,i)=>{
+                              {PROSPECTO_STEPS.map((s,i)=>{
                                 const active = s.check(p)
-                                const isNext = !active && STEPS.slice(0,i).every(prev=>prev.check(p))
+                                const isNext = !active && PROSPECTO_STEPS.slice(0,i).every(prev=>prev.check(p))
                                 return (
                                   <div key={s.key} style={{ flex:1, height:4, borderRadius:4,
                                     background: active ? T.secondary : isNext ? 'rgba(210,187,255,0.4)' : 'rgba(255,255,255,0.07)',
@@ -1420,24 +1420,21 @@ export default function AdminPage() {
                               })}
                             </div>
                             <div style={{ display:'flex', gap:3 }}>
-                              {STEPS.map(s=>{
-                                const active = s.check(p)
-                                return (
-                                  <div key={s.key} style={{ flex:1, textAlign:'center', fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em', color: active ? T.secondary : T.muted }}>
-                                    {s.label}
-                                  </div>
-                                )
-                              })}
+                              {PROSPECTO_STEPS.map(s=>(
+                                <div key={s.key} style={{ flex:1, textAlign:'center', fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em', color: s.check(p) ? T.secondary : T.muted }}>
+                                  {s.label}
+                                </div>
+                              ))}
                             </div>
                           </div>
 
-                          {/* Timestamps + brief */}
+                          {/* Timestamps */}
                           <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 16px', fontSize:11, color:T.muted }}>
-                            {p.enviadoAt && <span>📤 {fmtDate(p.enviadoAt)}</span>}
-                            {p.respondioAt && <span>💬 respondió {fmtDate(p.respondioAt)}</span>}
+                            {p.enviadoAt && <span>📤 {fmtProspectoDate(p.enviadoAt)}</span>}
+                            {p.respondioAt && <span>💬 respondió {fmtProspectoDate(p.respondioAt)}</span>}
                             {p.followUp1At && <span>🔔 follow-up 1</span>}
                             {p.followUp2At && <span>🔔 follow-up 2</span>}
-                            {p.completadoAt && <span>🎯 brief {fmtDate(p.completadoAt)}</span>}
+                            {p.completadoAt && <span>🎯 brief {fmtProspectoDate(p.completadoAt)}</span>}
                           </div>
 
                           {/* Brief preview */}
@@ -1454,8 +1451,7 @@ export default function AdminPage() {
                     })}
                   </div>
                 </div>
-              )
-            })()}
+            )}
 
             {/* ── PDF ── */}
             {activeNav === 'pdf' && (
