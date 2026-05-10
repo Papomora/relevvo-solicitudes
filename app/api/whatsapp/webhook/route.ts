@@ -44,17 +44,23 @@ export async function POST(req: NextRequest) {
   const phone = from.startsWith('+') ? from : `+${from}`
 
   let text     = ''
-  let mediaUrl: string | undefined
+  let mediaInfo: { url: string; mimeType: string; ext: string } | undefined
 
   switch (msg.type) {
     case 'text':
       text = msg.text?.body ?? ''
       break
     case 'image':
+      mediaInfo = await fetchMediaInfo(msg.image?.id, 'image/jpeg', 'jpg')
+      text = msg.image?.caption ?? ''
+      break
     case 'document':
+      mediaInfo = await fetchMediaInfo(msg.document?.id, msg.document?.mime_type ?? 'application/octet-stream', msg.document?.filename?.split('.').pop() ?? 'bin')
+      text = msg.document?.caption ?? ''
+      break
     case 'video':
-      mediaUrl = await fetchMediaUrl(msg[msg.type]?.id)
-      text = msg.caption ?? ''
+      mediaInfo = await fetchMediaInfo(msg.video?.id, 'video/mp4', 'mp4')
+      text = msg.video?.caption ?? ''
       break
     case 'audio':
       text = '[Mensaje de voz — no puedo procesar audio]'
@@ -65,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   // Await handler — fire-and-forget caused silent failures in serverless
   try {
-    await handleIncomingMessage(phone, text, mediaUrl)
+    await handleIncomingMessage(phone, text, mediaInfo)
   } catch (e) {
     console.error('[webhook] handleIncomingMessage failed:', e)
   }
@@ -74,7 +80,9 @@ export async function POST(req: NextRequest) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────
-async function fetchMediaUrl(mediaId?: string): Promise<string | undefined> {
+async function fetchMediaInfo(
+  mediaId?: string, mimeType = 'application/octet-stream', ext = 'bin'
+): Promise<{ url: string; mimeType: string; ext: string } | undefined> {
   if (!mediaId) return undefined
   const token = process.env.META_WA_TOKEN
   if (!token) return undefined
@@ -82,8 +90,9 @@ async function fetchMediaUrl(mediaId?: string): Promise<string | undefined> {
     const res  = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    const data = await res.json()
-    return data.url as string | undefined
+    const data = await res.json() as any
+    if (!data.url) return undefined
+    return { url: data.url as string, mimeType: data.mime_type ?? mimeType, ext }
   } catch {
     return undefined
   }

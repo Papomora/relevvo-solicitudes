@@ -3,6 +3,9 @@ import { prisma } from './prisma'
 import { sendWA } from './whatsapp-send'
 import { notifyTeam, notifyClienteEstado } from './team-notify'
 import { ASIGNACION, CLIENTES } from './constants'
+import { uploadMediaToDrive } from './google-drive'
+
+type MediaInfo = { url: string; mimeType: string; ext: string }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TIMEOUT_MS = 30 * 60 * 1000 // 30 min
@@ -19,7 +22,7 @@ interface AgentResponse { reply: string; action?: AgentAction }
 
 // ── Entry point ────────────────────────────────────────────────
 export async function handleIncomingMessage(
-  phone: string, text: string, mediaUrl?: string
+  phone: string, text: string, media?: MediaInfo
 ): Promise<void> {
   // 1. Verify registered client
   const cwa = await prisma.clienteWA.findUnique({ where: { phone } })
@@ -80,7 +83,7 @@ export async function handleIncomingMessage(
   const clienteActivo = isMultiCuenta ? session.cliente : cwa.nombre
 
   let hist = (session.historial as HistEntry[]).slice(-18)
-  hist.push({ role: 'user', content: mediaUrl ? `${text || ''}[adjunto recibido]` : text })
+  hist.push({ role: 'user', content: media ? `${text || ''}[adjunto recibido]` : text })
 
   // 4. Context: active solicitudes + monthly usage
   const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -130,18 +133,25 @@ export async function handleIncomingMessage(
   // If multiple updates happened, use the reply from the first parsed block
   if (allParsed.length > 1 && allParsed[0].reply) finalReply = allParsed[0].reply
 
-  // 7. Save incoming media to most recent solicitud
-  if (mediaUrl && activas.length > 0) {
+  // 7. Save incoming media to most recent solicitud (upload to Google Drive if configured)
+  if (media && activas.length > 0) {
     const s = activas[0]
     const full = await prisma.solicitud.findUnique({ where: { id: s.id }, select: { adjuntos: true } })
     if (full) {
       const adj = Array.isArray(full.adjuntos) ? (full.adjuntos as string[]) : []
-      await prisma.solicitud.update({ where: { id: s.id }, data: { adjuntos: [...adj, mediaUrl] } }).catch(() => {})
-      const text2 = encodeURIComponent(`📎 ${clienteActivo} envió un archivo para #REL-${s.id}\n🔗 solicitudes.relevvostudio.com/admin`)
+
+      // Try Drive upload; fall back to raw CDN URL
+      const savedUrl = await uploadMediaToDrive(media.url, media.mimeType, media.ext, clienteActivo, s.id)
+        .catch(() => null) ?? media.url
+
+      await prisma.solicitud.update({ where: { id: s.id }, data: { adjuntos: [...adj, savedUrl] } }).catch(() => {})
+
+      // Notify team
+      const teamMsg = encodeURIComponent(`📎 ${clienteActivo} envió un archivo para #REL-${s.id}\n🔗 solicitudes.relevvostudio.com/admin`)
       for (let i = 1; i <= 3; i++) {
         const p = process.env[`WHATSAPP_PHONE_${i}`]
         const k = process.env[`WHATSAPP_APIKEY_${i}`]
-        if (p && k) fetch(`https://api.callmebot.com/whatsapp.php?phone=${p}&text=${text2}&apikey=${k}`).catch(() => {})
+        if (p && k) fetch(`https://api.callmebot.com/whatsapp.php?phone=${p}&text=${teamMsg}&apikey=${k}`).catch(() => {})
       }
     }
   }
