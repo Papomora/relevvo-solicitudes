@@ -5,6 +5,13 @@ import { useSession, signOut } from 'next-auth/react'
 import { ESTADOS, CLIENTES, URGENCIAS, TIPOS, PERFILES, EQUIPO, PRESUPUESTO_CLIENTES, COSTO_TIPO } from '@/lib/constants'
 
 type Adjunto = { url: string; name: string }
+type ProspectoItem = {
+  id: number; phone: string; nombre: string | null; estado: string
+  entregado: boolean; leido: boolean
+  enviadoAt: string | null; respondioAt: string | null; completadoAt: string | null
+  followUp1At: string | null; followUp2At: string | null
+  brief: string | null; createdAt: string
+}
 type Solicitud = {
   id: number; cliente: string; tipo: string; urgencia: string
   descripcion: string; estado: string; nota: string | null
@@ -144,6 +151,7 @@ export default function AdminPage() {
   const [prospectoNombre, setProspectoNombre]     = useState('')
   const [sendingProspecto, setSendingProspecto]   = useState(false)
   const [prospectoOk, setProspectoOk]             = useState(false)
+  const [prospectos, setProspectos]               = useState<ProspectoItem[]>([])
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -168,7 +176,13 @@ export default function AdminPage() {
     if (res.ok) setIntegrantes(await res.json())
   }, [])
 
-  useEffect(() => { fetchAll(); fetchIntegrantes() }, [fetchAll, fetchIntegrantes])
+  const fetchProspectos = useCallback(async () => {
+    const res = await fetch('/api/whatsapp/prospecto')
+    if (res.ok) setProspectos(await res.json())
+  }, [])
+
+  useEffect(() => { fetchAll(); fetchIntegrantes(); fetchProspectos() }, [fetchAll, fetchIntegrantes, fetchProspectos])
+  useEffect(() => { if (activeNav === 'prospectos') fetchProspectos() }, [activeNav, fetchProspectos])
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPerm(Notification.permission)
@@ -1272,53 +1286,166 @@ export default function AdminPage() {
             )}
 
             {/* ── PROSPECTOS ── */}
-            {activeNav === 'prospectos' && (
-              <div style={{ maxWidth:520 }}>
-                <div style={{ marginBottom:24 }}>
-                  <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Prospectos</h2>
-                  <p style={{ fontSize:13, color:T.muted }}>Envía un mensaje de WhatsApp a un prospecto invitándolo a trabajar con Relevvo.</p>
-                </div>
-                <Glass style={{ padding:24 }}>
-                  <label style={labelStyle}>Número de WhatsApp</label>
-                  <input
-                    value={prospectoPhone}
-                    onChange={e => setProspectoPhone(e.target.value)}
-                    placeholder="+573001234567"
-                    style={{ ...inputStyle, marginBottom:14 }}
-                  />
-                  <label style={labelStyle}>Nombre (opcional)</label>
-                  <input
-                    value={prospectoNombre}
-                    onChange={e => setProspectoNombre(e.target.value)}
-                    placeholder="Ej: El Rincón Vegano"
-                    style={{ ...inputStyle, marginBottom:20 }}
-                  />
-                  <div style={{ padding:'14px 16px', borderRadius:12, background:'rgba(124,58,237,0.08)', border:'1px solid rgba(124,58,237,0.2)', fontSize:13, color:T.muted, marginBottom:20, lineHeight:1.6 }}>
-                    📨 <strong style={{ color:'#fff' }}>Mensaje que recibirán:</strong><br/>
-                    "Hola <em>{prospectoNombre || 'amig@'}</em> 👋 Somos <strong>Relevvo Studio</strong>, agencia creativa. Más allá de nuestros planes, ahora nos adaptamos a tu presupuesto. ¿Te cuento cómo? 🚀"
+            {activeNav === 'prospectos' && (() => {
+              const STEPS = [
+                { key:'enviado',    label:'Enviado',   check:(p:ProspectoItem)=>!!p.enviadoAt },
+                { key:'entregado',  label:'Entregado', check:(p:ProspectoItem)=>p.entregado },
+                { key:'leido',      label:'Leído',     check:(p:ProspectoItem)=>p.leido },
+                { key:'respondio',  label:'Respondió', check:(p:ProspectoItem)=>!!p.respondioAt },
+                { key:'brief',      label:'Brief ✓',   check:(p:ProspectoItem)=>!!p.completadoAt },
+              ]
+              function stepsDone(p: ProspectoItem) { return STEPS.filter(s=>s.check(p)).length }
+              function fmtDate(iso:string|null) {
+                if (!iso) return null
+                const d = new Date(iso)
+                return d.toLocaleDateString('es-CO',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
+              }
+              return (
+                <div style={{ maxWidth:720 }}>
+                  <div style={{ marginBottom:24 }}>
+                    <h2 style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.03em', marginBottom:4 }}>Prospectos</h2>
+                    <p style={{ fontSize:13, color:T.muted }}>Envía y rastrea mensajes de prospección por WhatsApp.</p>
                   </div>
-                  {prospectoOk && <p style={{ fontSize:13, color:T.secondary, marginBottom:12 }}>✅ Mensaje enviado exitosamente.</p>}
-                  <button
-                    disabled={sendingProspecto || !prospectoPhone.trim()}
-                    onClick={async () => {
-                      setSendingProspecto(true); setProspectoOk(false)
-                      const res = await fetch('/api/whatsapp/prospecto', {
-                        method:'POST', headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({ phone: prospectoPhone.trim(), nombre: prospectoNombre.trim() }),
-                      })
-                      setSendingProspecto(false)
-                      if (res.ok) { setProspectoOk(true); setProspectoPhone(''); setProspectoNombre('') }
-                    }}
-                    style={{ width:'100%', padding:'12px 0', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:14, opacity:(sendingProspecto||!prospectoPhone.trim())?0.5:1 }}
-                  >
-                    {sendingProspecto ? 'Enviando…' : '📤 Enviar mensaje'}
-                  </button>
-                  <p style={{ fontSize:11, color:T.muted, marginTop:12, textAlign:'center' }}>
-                    Requiere template <code>relevvo_prospecto</code> aprobado en Meta Business Manager.
-                  </p>
-                </Glass>
-              </div>
-            )}
+
+                  {/* Send form */}
+                  <Glass style={{ padding:24, marginBottom:28 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+                      <div>
+                        <label style={labelStyle}>Número de WhatsApp</label>
+                        <input value={prospectoPhone} onChange={e=>setProspectoPhone(e.target.value)} placeholder="+573001234567" style={inputStyle}/>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Nombre (opcional)</label>
+                        <input value={prospectoNombre} onChange={e=>setProspectoNombre(e.target.value)} placeholder="Ej: El Rincón Vegano" style={inputStyle}/>
+                      </div>
+                    </div>
+                    <div style={{ padding:'12px 16px', borderRadius:12, background:'rgba(124,58,237,0.08)', border:'1px solid rgba(124,58,237,0.2)', fontSize:12, color:T.muted, marginBottom:16, lineHeight:1.6 }}>
+                      📨 &quot;Hola <em>{prospectoNombre||'amig@'}</em> 👋 Somos <strong style={{color:'#fff'}}>Relevvo Studio</strong>…&quot;
+                    </div>
+                    {prospectoOk && <p style={{ fontSize:13, color:T.secondary, marginBottom:10 }}>✅ Mensaje enviado.</p>}
+                    <button
+                      disabled={sendingProspecto||!prospectoPhone.trim()}
+                      onClick={async()=>{
+                        setSendingProspecto(true); setProspectoOk(false)
+                        const res = await fetch('/api/whatsapp/prospecto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:prospectoPhone.trim(),nombre:prospectoNombre.trim()})})
+                        setSendingProspecto(false)
+                        if(res.ok){setProspectoOk(true);setProspectoPhone('');setProspectoNombre('');fetchProspectos()}
+                      }}
+                      style={{ padding:'10px 24px', borderRadius:10, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#7C3AED,#D2BBFF)', color:'#fff', fontWeight:700, fontSize:13, opacity:(sendingProspecto||!prospectoPhone.trim())?0.5:1 }}
+                    >
+                      {sendingProspecto?'Enviando…':'📤 Enviar mensaje'}
+                    </button>
+                  </Glass>
+
+                  {/* Summary row */}
+                  {prospectos.length > 0 && (
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
+                      {[
+                        { label:'Enviados',   val:prospectos.length,                              color:T.primary },
+                        { label:'Entregados', val:prospectos.filter(p=>p.entregado).length,       color:'#60A5FA' },
+                        { label:'Respuestas', val:prospectos.filter(p=>p.respondioAt).length,     color:'#FBBF24' },
+                        { label:'Briefs',     val:prospectos.filter(p=>p.completadoAt).length,    color:T.secondary },
+                      ].map(s=>(
+                        <Glass key={s.label} style={{ padding:'14px 16px', textAlign:'center' }}>
+                          <div style={{ fontSize:24, fontWeight:900, color:s.color }}>{s.val}</div>
+                          <div style={{ fontSize:11, color:T.muted, marginTop:2, fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>{s.label}</div>
+                        </Glass>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Prospect list */}
+                  <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                    {prospectos.length === 0 && (
+                      <p style={{ fontSize:13, color:T.muted, textAlign:'center', padding:'40px 0' }}>No hay prospectos aún. Envía el primer mensaje arriba.</p>
+                    )}
+                    {[...prospectos].sort((a,b)=>new Date(b.enviadoAt??b.createdAt??0).getTime()-new Date(a.enviadoAt??a.createdAt??0).getTime()).map(p=>{
+                      const done  = stepsDone(p)
+                      const total = STEPS.length
+                      const pct   = Math.round((done/total)*100)
+                      const isComplete = !!p.completadoAt
+                      const brief = p.brief ? (() => { try { return JSON.parse(p.brief) } catch { return null } })() : null
+                      return (
+                        <Glass key={p.id} style={{ padding:'18px 20px' }}>
+                          {/* Header row */}
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                              <div style={{ width:36, height:36, borderRadius:10, background: isComplete ? 'rgba(65,229,117,0.15)' : 'rgba(124,58,237,0.15)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                <Icon name={isComplete?'check_circle':'person'} size={18} filled={isComplete}/>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:14, fontWeight:700, color:'#fff' }}>{p.nombre||p.phone}</div>
+                                {p.nombre && <div style={{ fontSize:11, color:T.muted }}>{p.phone}</div>}
+                              </div>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {/* delivery icons */}
+                              <span title={p.entregado?'Entregado':'No entregado aún'} style={{ fontSize:11, color:p.entregado?T.secondary:T.muted }}>
+                                {p.entregado?'✓ entregado':'⏳'}
+                              </span>
+                              {p.leido && <span title="Leído" style={{ fontSize:11, color:'#60A5FA' }}>👁 leído</span>}
+                              <span style={{
+                                padding:'3px 10px', borderRadius:999, fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'.08em',
+                                background: isComplete ? 'rgba(65,229,117,0.12)' : done===0 ? 'rgba(255,255,255,0.05)' : 'rgba(124,58,237,0.12)',
+                                color: isComplete ? T.secondary : done===0 ? T.muted : T.primary,
+                                border: `1px solid ${isComplete?T.secondary+'30':done===0?T.border:T.primary+'30'}`,
+                              }}>
+                                {isComplete ? 'Completado' : done===0 ? 'Enviado' : `${pct}%`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div style={{ marginBottom:12 }}>
+                            <div style={{ display:'flex', gap:3, marginBottom:6 }}>
+                              {STEPS.map((s,i)=>{
+                                const active = s.check(p)
+                                const isNext = !active && STEPS.slice(0,i).every(prev=>prev.check(p))
+                                return (
+                                  <div key={s.key} style={{ flex:1, height:4, borderRadius:4,
+                                    background: active ? T.secondary : isNext ? 'rgba(210,187,255,0.4)' : 'rgba(255,255,255,0.07)',
+                                    transition:'background .3s',
+                                  }}/>
+                                )
+                              })}
+                            </div>
+                            <div style={{ display:'flex', gap:3 }}>
+                              {STEPS.map(s=>{
+                                const active = s.check(p)
+                                return (
+                                  <div key={s.key} style={{ flex:1, textAlign:'center', fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em', color: active ? T.secondary : T.muted }}>
+                                    {s.label}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Timestamps + brief */}
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 16px', fontSize:11, color:T.muted }}>
+                            {p.enviadoAt && <span>📤 {fmtDate(p.enviadoAt)}</span>}
+                            {p.respondioAt && <span>💬 respondió {fmtDate(p.respondioAt)}</span>}
+                            {p.followUp1At && <span>🔔 follow-up 1</span>}
+                            {p.followUp2At && <span>🔔 follow-up 2</span>}
+                            {p.completadoAt && <span>🎯 brief {fmtDate(p.completadoAt)}</span>}
+                          </div>
+
+                          {/* Brief preview */}
+                          {brief && (
+                            <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10, background:'rgba(65,229,117,0.06)', border:'1px solid rgba(65,229,117,0.15)', fontSize:12, color:T.onSurf, lineHeight:1.7 }}>
+                              <strong style={{ color:T.secondary, fontSize:11, textTransform:'uppercase', letterSpacing:'.08em' }}>Brief</strong><br/>
+                              🏢 {brief.negocio} · 🏷️ {brief.industria}<br/>
+                              📋 {brief.necesidades}<br/>
+                              🎯 {brief.objetivo} · 💰 {brief.presupuesto}
+                            </div>
+                          )}
+                        </Glass>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* ── PDF ── */}
             {activeNav === 'pdf' && (

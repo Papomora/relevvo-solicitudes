@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { handleIncomingMessage } from '@/lib/whatsapp-agent'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -36,8 +37,30 @@ export async function POST(req: NextRequest) {
   let body: any
   try { body = JSON.parse(bodyText) } catch { return NextResponse.json({ ok: true }) }
 
-  const messages = body?.entry?.[0]?.changes?.[0]?.value?.messages
-  if (!messages?.length) return NextResponse.json({ ok: true }) // status updates, ignore
+  const value    = body?.entry?.[0]?.changes?.[0]?.value
+  const messages = value?.messages
+  const statuses = value?.statuses
+
+  // Handle delivery/read status updates for prospect tracking
+  if (statuses?.length) {
+    for (const s of statuses) {
+      const recipientPhone = (s.recipient_id as string ?? '').replace(/^(\+?)/, '+')
+      if (s.status === 'delivered') {
+        await prisma.prospectoSession.updateMany({
+          where: { phone: recipientPhone },
+          data:  { entregado: true },
+        }).catch(() => {})
+      } else if (s.status === 'read') {
+        await prisma.prospectoSession.updateMany({
+          where: { phone: recipientPhone },
+          data:  { leido: true },
+        }).catch(() => {})
+      }
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (!messages?.length) return NextResponse.json({ ok: true })
 
   const msg  = messages[0]
   const from = msg.from as string // e.g. "573001234567"

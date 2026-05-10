@@ -4,7 +4,8 @@
     { "path": "/api/cron/recordatorios",    "schedule": "0 14 * * 1-5"   },
     { "path": "/api/cron/check-in",         "schedule": "0 14 * * 1-5"   },
     { "path": "/api/cron/limites",          "schedule": "0 15 * * *"     },
-    { "path": "/api/cron/reporte-mensual",  "schedule": "0 13 1 * *"     }
+    { "path": "/api/cron/reporte-mensual",       "schedule": "0 13 1 * *"     },
+    { "path": "/api/cron/prospectos-followup",   "schedule": "0 * * * *"       }
   ],
   "headers": [
     {

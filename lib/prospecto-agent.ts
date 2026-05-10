@@ -88,6 +88,14 @@ export async function handleProspectoMessage(phone: string, text: string): Promi
 
   hist.push({ role: 'user', content: text })
 
+  // Track first response time
+  if (!session.respondioAt) {
+    await prisma.prospectoSession.update({
+      where: { phone },
+      data:  { respondioAt: now, estado: 'activo' },
+    }).catch(() => {})
+  }
+
   // Claude call
   let aiMsg: Awaited<ReturnType<typeof anthropic.messages.create>>
   try {
@@ -120,9 +128,11 @@ export async function handleProspectoMessage(phone: string, text: string): Promi
     await prisma.prospectoSession.update({
       where: { phone },
       data: {
-        historial:     hist.slice(-30),
-        estado:        'completado',
-        brief:         JSON.stringify(parsed.brief),
+        historial:    hist.slice(-30),
+        estado:       'completado',
+        brief:        JSON.stringify(parsed.brief),
+        nombre:       parsed.brief.negocio || undefined,
+        completadoAt: now,
         ultimoMensaje: now,
       },
     })
