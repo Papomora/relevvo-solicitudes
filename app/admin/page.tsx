@@ -430,7 +430,7 @@ export default function AdminPage() {
             </div>
             <div>
               <p style={{ fontSize:16, fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-.03em' }}>Relevvo</p>
-              <p style={{ fontSize:11, color:T.muted, fontWeight:500, marginTop:2 }}>Studio Portal</p>
+              <p style={{ fontSize:11, color:T.muted, fontWeight:500, marginTop:2 }}>Studio Portal <span style={{color:'rgba(210,187,255,0.4)',fontSize:9}}>v2.6</span></p>
             </div>
           </div>
 
