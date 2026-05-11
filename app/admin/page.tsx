@@ -1336,7 +1336,7 @@ export default function AdminPage() {
                           const data = await res.json()
                           setProspectoOk(true)
                           setProspectoPhone('');setProspectoNombre('');fetchProspectos()
-                          if(!data.whatsapp) setProspectoErr('Guardado en DB pero WhatsApp no confirmó envío. Verifica el template en Meta.')
+                          if(!data.whatsapp) setProspectoErr('WhatsApp no confirmó envío' + (data.waError ? `: ${data.waError}` : '. Verifica el template en Meta.'))
                         } else {
                           const data = await res.json().catch(()=>({}))
                           setProspectoErr(data.error ?? `Error ${res.status}` + (data.detail ? `: ${data.detail}` : ''))

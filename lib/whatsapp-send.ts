@@ -32,11 +32,11 @@ export async function sendWA(to: string, text: string): Promise<void> {
 // Meta WhatsApp Cloud API — send an approved template message
 // Returns: Meta message ID (wamid) or null
 export async function sendWATemplate(
-  to: string, templateName: string, params: string[] = []
-): Promise<string | null> {
+  to: string, templateName: string, params: string[] = [], langCode = 'es'
+): Promise<{ id: string | null; error?: string }> {
   const token   = process.env.META_WA_TOKEN
   const phoneId = process.env.META_WA_PHONE_NUMBER_ID
-  if (!token || !phoneId) return null
+  if (!token || !phoneId) return { id: null, error: 'Missing META_WA_TOKEN or META_WA_PHONE_NUMBER_ID' }
 
   const components = params.length > 0 ? [{
     type: 'body',
@@ -51,20 +51,20 @@ export async function sendWATemplate(
         messaging_product: 'whatsapp',
         to,
         type: 'template',
-        template: { name: templateName, language: { code: 'es' }, components },
+        template: { name: templateName, language: { code: langCode }, components },
       }),
     })
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[sendWATemplate] ${res.status} to ${to}:`, err)
-      return null
-    }
     const data = await res.json() as any
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? JSON.stringify(data)
+      console.error(`[sendWATemplate] ${res.status} to ${to}:`, errMsg)
+      return { id: null, error: errMsg }
+    }
     const msgId = data?.messages?.[0]?.id ?? null
     console.log(`[sendWATemplate] Sent "${templateName}" to ${to} — id: ${msgId}`)
-    return msgId
-  } catch (e) {
+    return { id: msgId }
+  } catch (e: any) {
     console.error('[sendWATemplate] fetch failed:', e)
-    return null
+    return { id: null, error: e?.message ?? String(e) }
   }
 }

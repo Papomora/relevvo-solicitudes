@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const nombreClean = nombre?.trim() || 'amig@'
 
   const templateName = process.env.META_WA_TEMPLATE_PROSPECTO ?? 'relevvo_prospecto'
-  const msgId = await sendWATemplate(normalized, templateName, [nombreClean])
+  const { id: msgId, error: waError } = await sendWATemplate(normalized, templateName, [nombreClean])
 
   const now = new Date()
 
@@ -76,5 +76,5 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({ ok: true, phone: normalized, messageId: msgId, whatsapp: !!msgId })
+  return NextResponse.json({ ok: true, phone: normalized, messageId: msgId, whatsapp: !!msgId, waError: waError ?? null })
 }
