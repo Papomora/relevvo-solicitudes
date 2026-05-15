@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
   const nombreClean = nombre?.trim() || 'amig@'
 
   const templateName = process.env.META_WA_TEMPLATE_PROSPECTO ?? 'relevvo_prospecto'
-  const { id: msgId, error: waError } = await sendWATemplate(normalized, templateName, [nombreClean])
+  const lang = process.env.META_WA_TEMPLATE_LANG ?? 'es_419'
+  const { id: msgId, error: waError } = await sendWATemplate(normalized, templateName, [nombreClean], lang)
 
   const now = new Date()
 

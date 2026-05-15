@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
 
   for (const p of noReply2h) {
     const templateName = process.env.META_WA_TEMPLATE_PROSPECTO ?? 'relevvo_prospecto'
+    const lang = process.env.META_WA_TEMPLATE_LANG ?? 'es_419'
     const nombre = p.nombre ?? 'amig@'
-    await sendWATemplate(p.phone, templateName, [nombre])
+    await sendWATemplate(p.phone, templateName, [nombre], lang)
     await prisma.prospectoSession.update({
       where: { phone: p.phone },
       data:  { followUp1At: now },
@@ -52,8 +53,9 @@ export async function GET(req: NextRequest) {
 
   for (const p of noReply12h) {
     const templateName = process.env.META_WA_TEMPLATE_PROSPECTO ?? 'relevvo_prospecto'
+    const lang = process.env.META_WA_TEMPLATE_LANG ?? 'es_419'
     const nombre = p.nombre ?? 'amig@'
-    await sendWATemplate(p.phone, templateName, [nombre])
+    await sendWATemplate(p.phone, templateName, [nombre], lang)
     await prisma.prospectoSession.update({
       where: { phone: p.phone },
       data:  { followUp2At: now },
