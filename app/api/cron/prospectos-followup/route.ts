@@ -10,9 +10,10 @@ export async function GET(req: NextRequest) {
   if (secret !== `Bearer ${process.env.CRON_SECRET}`)
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const now   = new Date()
-  const h2    = new Date(now.getTime() - 2  * 60 * 60 * 1000)
-  const h12   = new Date(now.getTime() - 12 * 60 * 60 * 1000)
+  const now    = new Date()
+  const h2     = new Date(now.getTime() - 2  * 60 * 60 * 1000)
+  const h12    = new Date(now.getTime() - 12 * 60 * 60 * 1000)
+  const ADMIN  = process.env.ADMIN_WA_PHONE ?? '+573223094005'
   let sent = 0
 
   // ── Follow-up 1: 2h after sending, no response yet ────────────
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
       respondioAt: null,
       enviadoAt:   { lte: h2 },
       followUp1At: null,
+      phone:       { not: ADMIN },  // never follow-up admin
     },
   })
 
@@ -36,13 +38,15 @@ export async function GET(req: NextRequest) {
     sent++
   }
 
-  // ── Follow-up 2: 12h after sending, still no response ─────────
+  // ── Follow-up 2: 12h after sending, follow-up 1 already sent, still no response ──
   const noReply12h = await prisma.prospectoSession.findMany({
     where: {
       estado:      'activo',
       respondioAt: null,
       enviadoAt:   { lte: h12 },
+      followUp1At: { not: null },   // only after FU1 was sent in a previous run
       followUp2At: null,
+      phone:       { not: ADMIN },
     },
   })
 
@@ -65,6 +69,7 @@ export async function GET(req: NextRequest) {
       completadoAt: null,
       followUp1At:  null,
       ultimoMensaje:{ lte: h2 },
+      phone:        { not: ADMIN },
     },
   })
 
