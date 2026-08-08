@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { User } from 'firebase/auth'
 import { useSession } from 'next-auth/react'
 import {
   collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { db, initAuth } from './firebase'
-import { formatCurrency, generateId } from './utils'
+import { formatCurrency, generateId, numberToSpanishWords } from './utils'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -108,6 +108,83 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label style={labelStyle}>{label}</label>{children}</div>
+}
+
+// ── PDF generation ─────────────────────────────────────────────
+function buildInvoiceHtml(invoice: Invoice, settings: AppSettings): string {
+  const rows = invoice.items.map(it => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${it.serviceName}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${it.quantity}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(it.unitPrice, settings.currency)}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(it.total, settings.currency)}</td>
+    </tr>`).join('')
+  return `
+  <div style="font-family:Helvetica,Arial,sans-serif;color:#1F2937;padding:40px;width:700px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;">
+      <div>
+        ${settings.logoUrl ? `<img src="${settings.logoUrl}" style="max-width:120px;max-height:70px;object-fit:contain;margin-bottom:8px;" />` : ''}
+        <p style="font-size:16px;font-weight:800;margin:0;">${settings.companyName || 'Relevvo Studio'}</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0;">NIT: ${settings.companyNit || '-'}</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0;">${settings.companyAddress || ''}</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0;">${settings.companyEmail || ''} · ${settings.companyPhone || ''}</p>
+      </div>
+      <div style="text-align:right;">
+        <p style="font-size:20px;font-weight:900;color:#7C3AED;margin:0;">FACTURA</p>
+        <p style="font-size:13px;font-weight:700;margin:4px 0;">${invoice.number}</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0;">Fecha: ${invoice.date}</p>
+        <p style="font-size:11px;color:#6B7280;margin:2px 0;">Vence: ${invoice.dueDate}</p>
+      </div>
+    </div>
+
+    <div style="background:#FFF9EC;border-radius:10px;padding:14px 18px;margin-bottom:24px;">
+      <p style="font-size:10px;color:#78716C;text-transform:uppercase;margin:0 0 4px;">Facturar a</p>
+      <p style="font-size:13px;font-weight:700;margin:0;">${invoice.clientName}</p>
+      <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">NIT: ${invoice.clientNit || '-'}</p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+      <thead>
+        <tr style="background:#F0E6C8;">
+          <th style="padding:8px;text-align:left;font-size:11px;">Servicio</th>
+          <th style="padding:8px;text-align:center;font-size:11px;">Cant.</th>
+          <th style="padding:8px;text-align:right;font-size:11px;">Precio</th>
+          <th style="padding:8px;text-align:right;font-size:11px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+      <div style="width:240px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;"><span>Subtotal</span><span>${formatCurrency(invoice.subtotal, settings.currency)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;"><span>Impuesto (${invoice.tax}%)</span><span>${formatCurrency(invoice.taxAmount, settings.currency)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:900;padding:8px 0;border-top:2px solid #1F2937;margin-top:4px;"><span>Total</span><span>${formatCurrency(invoice.total, settings.currency)}</span></div>
+      </div>
+    </div>
+
+    <p style="font-size:10px;color:#78716C;font-style:italic;margin-bottom:20px;">${numberToSpanishWords(invoice.total)}</p>
+
+    ${invoice.notes ? `<p style="font-size:11px;color:#6B7280;margin-bottom:16px;"><b>Notas:</b> ${invoice.notes}</p>` : ''}
+    ${settings.bankDetails ? `<p style="font-size:11px;color:#6B7280;"><b>Datos de pago:</b> ${settings.bankDetails}</p>` : ''}
+  </div>`
+}
+
+async function downloadInvoicePdf(invoice: Invoice, settings: AppSettings) {
+  const html2pdf = (await import('html2pdf.js')).default
+  const container = document.createElement('div')
+  container.style.position = 'fixed'
+  container.style.left = '-9999px'
+  container.innerHTML = buildInvoiceHtml(invoice, settings)
+  document.body.appendChild(container)
+  try {
+    await html2pdf().from(container).set({
+      margin: 0, filename: `${invoice.number}.pdf`,
+      html2canvas: { scale: 2 }, jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
+    }).save()
+  } finally {
+    document.body.removeChild(container)
+  }
 }
 
 const SUB_NAV = [
@@ -756,6 +833,7 @@ function FacturasView({ invoices, clients, services, settings, onNew, onEdit, on
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <Badge label={i.status} />
+              <button style={iconBtn} onClick={() => downloadInvoicePdf(i, settings)} title="Descargar PDF"><Icon name="picture_as_pdf" size={16} /></button>
               <button style={iconBtn} onClick={() => onToggleStatus(i)} title="Marcar pagada/pendiente"><Icon name="check_circle" size={16} /></button>
               <button style={iconBtn} onClick={() => onEdit(i)}><Icon name="edit" size={16} /></button>
               <button style={iconBtn} onClick={() => onDelete(i)}><Icon name="delete" size={16} /></button>
@@ -773,15 +851,21 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
 }) {
   const isNew = !invoice
   const [clientId, setClientId] = useState(invoice?.clientId || '')
+  const [pickingClient, setPickingClient] = useState(isNew)
   const [date, setDate] = useState(invoice?.date || todayStr())
   const [dueDate, setDueDate] = useState(invoice?.dueDate || todayStr())
-  const [items, setItems] = useState<InvoiceItem[]>(invoice?.items || [])
+  const [items, setItems] = useState<InvoiceItem[]>(invoice?.items?.length ? invoice.items : [{ id: generateId(), serviceName: '', quantity: 1, unitPrice: 0, total: 0 }])
   const [status, setStatus] = useState<InvoiceStatus>(invoice?.status || InvoiceStatus.PENDING)
   const [notes, setNotes] = useState(invoice?.notes || '')
+  const [amountPaid, setAmountPaid] = useState(invoice?.amountPaid || 0)
+  const [isRecurring, setIsRecurring] = useState(invoice?.isRecurring || false)
+  const [taxRate, setTaxRate] = useState(settings.taxRate)
+  const previewRef = useRef<HTMLDivElement>(null)
 
   const subtotal = items.reduce((s, it) => s + it.total, 0)
-  const taxAmount = subtotal * (settings.taxRate / 100)
+  const taxAmount = subtotal * (taxRate / 100)
   const total = subtotal + taxAmount
+  const saldoPendiente = total - amountPaid
 
   const addItem = () => setItems([...items, { id: generateId(), serviceName: '', quantity: 1, unitPrice: 0, total: 0 }])
   const updateItem = (id: string, patch: Partial<InvoiceItem>) => {
@@ -794,70 +878,208 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
   }
 
   const client = clients.find(c => c.id === clientId)
+  const number = invoice?.number || `${settings.invoicePrefix}-${String(settings.nextInvoiceNumber).padStart(4, '0')}`
+
+  const buildInvoice = (): Invoice | null => {
+    if (!client) return null
+    return {
+      id: invoice?.id || generateId(), number, clientId: client.id, clientName: client.name, clientNit: client.nit,
+      date, dueDate, items, subtotal, tax: taxRate, taxAmount, total, amountPaid, status, notes, isRecurring,
+    }
+  }
+
+  const handlePrint = () => {
+    if (!previewRef.current) return
+    const w = window.open('', '_blank', 'width=850,height=1100')
+    if (!w) return
+    w.document.write(`<html><head><title>${number}</title></head><body>${previewRef.current.innerHTML}</body></html>`)
+    w.document.close()
+    w.onload = () => { w.print() }
+  }
+
+  const handleDownload = async () => {
+    if (!previewRef.current) return
+    const html2pdf = (await import('html2pdf.js')).default
+    await html2pdf().from(previewRef.current).set({
+      margin: 0, filename: `${number}.pdf`,
+      html2canvas: { scale: 2 }, jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
+    }).save()
+  }
 
   return (
-    <Modal title={isNew ? 'Nueva factura' : `Editar ${invoice!.number}`} onClose={onClose} wide>
-      <div style={{ display: 'grid', gap: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Cliente">
-            <select style={inputStyle} value={clientId} onChange={e => setClientId(e.target.value)}>
-              <option value="">Selecciona…</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Estado">
-            <select style={inputStyle} value={status} onChange={e => setStatus(e.target.value as InvoiceStatus)}>
-              {Object.values(InvoiceStatus).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Fecha"><input type="date" style={inputStyle} value={date} onChange={e => setDate(e.target.value)} /></Field>
-          <Field label="Vence"><input type="date" style={inputStyle} value={dueDate} onChange={e => setDueDate(e.target.value)} /></Field>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', flexDirection: 'column' }}>
+      {/* toolbar */}
+      <div style={{
+        background: '#131313', color: '#fff', padding: '12px 20px', display: 'flex',
+        justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 800 }}>Editor de Factura</span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+            background: 'rgba(255,255,255,0.12)', textTransform: 'uppercase',
+          }}>{status}</span>
         </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={labelStyle}>Ítems</span>
-            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} onClick={addItem}>+ Agregar</button>
-          </div>
-          {items.map(it => (
-            <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 100px 100px 30px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-              <select style={inputStyle} value={it.serviceName} onChange={e => {
-                const svc = services.find(s => s.name === e.target.value)
-                updateItem(it.id, { serviceName: e.target.value, unitPrice: svc?.price ?? it.unitPrice })
-              }}>
-                <option value="">Servicio…</option>
-                {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
-              <input type="number" style={inputStyle} value={it.quantity} onChange={e => updateItem(it.id, { quantity: Number(e.target.value) })} />
-              <input type="number" style={inputStyle} value={it.unitPrice} onChange={e => updateItem(it.id, { unitPrice: Number(e.target.value) })} />
-              <span style={{ fontSize: 12, color: T.onSurf }}>{formatCurrency(it.total, settings.currency)}</span>
-              <button style={{ ...iconBtn, width: 26, height: 26 }} onClick={() => setItems(items.filter(x => x.id !== it.id))}><Icon name="close" size={14} /></button>
-            </div>
-          ))}
-        </div>
-
-        <Field label="Notas"><textarea style={{ ...inputStyle, minHeight: 60 }} value={notes} onChange={e => setNotes(e.target.value)} /></Field>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, fontSize: 13, color: T.muted, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-          <span>Subtotal: {formatCurrency(subtotal, settings.currency)}</span>
-          <span>Impuesto ({settings.taxRate}%): {formatCurrency(taxAmount, settings.currency)}</span>
-          <span style={{ color: T.onSurf, fontWeight: 800 }}>Total: {formatCurrency(total, settings.currency)}</span>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button style={btnGhost} onClick={onClose}>Cancelar</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button style={{ ...btnGhost, borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }} onClick={handlePrint}>
+            <Icon name="print" size={14} /> Imprimir
+          </button>
+          <button style={{ ...btnGhost, borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }} onClick={handleDownload}>
+            <Icon name="download" size={14} /> Descargar PDF
+          </button>
           <button style={btnPrimary} onClick={() => {
-            if (!client) return
-            const number = invoice?.number || `${settings.invoicePrefix}-${String(settings.nextInvoiceNumber).padStart(4, '0')}`
-            onSave({
-              id: invoice?.id || generateId(), number, clientId: client.id, clientName: client.name, clientNit: client.nit,
-              date, dueDate, items, subtotal, tax: settings.taxRate, taxAmount, total,
-              amountPaid: invoice?.amountPaid || (status === InvoiceStatus.PAID ? total : 0), status, notes,
-            }, isNew)
-          }}>Guardar</button>
+            const inv = buildInvoice()
+            if (inv) onSave(inv, isNew)
+          }}><Icon name="check_circle" size={14} /> Guardar</button>
+          <button style={{ ...btnPrimary, background: T.danger }} onClick={onClose}><Icon name="close" size={14} /> Cerrar</button>
         </div>
       </div>
-    </Modal>
+
+      {/* live document preview / editor */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 16px', display: 'flex', justifyContent: 'center' }}>
+        <div ref={previewRef} style={{
+          background: '#fff', color: '#1F2937', width: 760, maxWidth: '100%', padding: 44, borderRadius: 4,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.25)', fontFamily: 'Helvetica, Arial, sans-serif',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+            <div>
+              {settings.logoUrl && <img src={settings.logoUrl} style={{ maxWidth: 140, maxHeight: 70, objectFit: 'contain', marginBottom: 10 }} />}
+              <h2 style={{ fontSize: 24, fontWeight: 900, margin: '4px 0' }}>CUENTA DE COBRO</h2>
+              <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>No. {number}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>{settings.companyName || 'Relevvo Studio'}</p>
+              <p style={{ fontSize: 11, color: '#6B7280', margin: '2px 0' }}>NIT: {settings.companyNit || '-'}</p>
+              <p style={{ fontSize: 11, color: '#6B7280', margin: '2px 0' }}>{settings.companyAddress}</p>
+              <p style={{ fontSize: 11, color: '#6B7280', margin: '2px 0' }}>{settings.companyPhone}</p>
+            </div>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #1F2937', marginBottom: 20 }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+            <div style={{ background: '#FFF9EC', borderRadius: 10, padding: '12px 16px', minWidth: 240 }}>
+              <p style={{ fontSize: 10, color: '#78716C', textTransform: 'uppercase', margin: '0 0 4px' }}>Cliente</p>
+              {pickingClient ? (
+                <select autoFocus style={inputStyle} value={clientId} onChange={e => { setClientId(e.target.value); setPickingClient(false) }}>
+                  <option value="">Selecciona…</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <>
+                  <p style={{ fontSize: 14, fontWeight: 800, margin: 0 }}>{client?.name || '—'}</p>
+                  <p style={{ fontSize: 11, color: '#6B7280', margin: '2px 0' }}>NIT: {client?.nit || '-'}</p>
+                  <a style={{ fontSize: 11, color: T.primaryC, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setPickingClient(true)}>Cambiar</a>
+                </>
+              )}
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 12 }}>
+              <p style={{ margin: '4px 0', display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                Fecha de Emisión: <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ border: '1px solid #E5E7EB', borderRadius: 6, padding: '3px 6px', fontSize: 12 }} />
+              </p>
+              <p style={{ margin: '4px 0', display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                Fecha de Vencimiento: <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ border: '1px solid #E5E7EB', borderRadius: 6, padding: '3px 6px', fontSize: 12 }} />
+              </p>
+            </div>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4 }}>
+            <thead>
+              <tr style={{ background: '#F0E6C8' }}>
+                <th style={{ padding: '8px', textAlign: 'left', fontSize: 11 }}>Descripción</th>
+                <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, width: 70 }}>Cant.</th>
+                <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, width: 110 }}>Precio Unit.</th>
+                <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, width: 110 }}>Total</th>
+                <th style={{ width: 30 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(it => (
+                <tr key={it.id}>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>
+                    <select style={{ ...inputStyle, marginBottom: 4 }} value={it.serviceName} onChange={e => {
+                      const svc = services.find(s => s.name === e.target.value)
+                      updateItem(it.id, { serviceName: e.target.value, unitPrice: svc?.price ?? it.unitPrice })
+                    }}>
+                      <option value="">Seleccionar del catálogo…</option>
+                      {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                    {it.serviceName && <p style={{ fontSize: 12, margin: 0 }}>{it.serviceName}</p>}
+                  </td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                    <input type="number" value={it.quantity} onChange={e => updateItem(it.id, { quantity: Number(e.target.value) })}
+                      style={{ width: 50, textAlign: 'center', border: '1px solid #E5E7EB', borderRadius: 6, padding: '3px' }} />
+                  </td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>
+                    <input type="number" value={it.unitPrice} onChange={e => updateItem(it.id, { unitPrice: Number(e.target.value) })}
+                      style={{ width: 90, textAlign: 'right', border: '1px solid #E5E7EB', borderRadius: 6, padding: '3px' }} />
+                  </td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(it.total, settings.currency)}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button onClick={() => setItems(items.filter(x => x.id !== it.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.danger }}>
+                      <Icon name="delete" size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <a style={{ fontSize: 12, color: T.primaryC, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }} onClick={addItem}>
+            <Icon name="add" size={14} />Agregar Ítem
+          </a>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+            <div style={{ width: 260 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0' }}><span>Subtotal:</span><span>{formatCurrency(subtotal, settings.currency)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0' }}>
+                <span>IVA <input type="number" value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} style={{ width: 44, border: '1px solid #E5E7EB', borderRadius: 6, padding: '2px 4px', marginLeft: 4 }} />:</span>
+                <span>{formatCurrency(taxAmount, settings.currency)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 900, padding: '8px 0', borderTop: '2px solid #1F2937', marginTop: 4 }}>
+                <span>Total:</span><span>{formatCurrency(total, settings.currency)}</span>
+              </div>
+              <div style={{ background: '#FFF9EC', borderRadius: 10, padding: 12, marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 6 }}>
+                  <span>Abonado / Pagado:</span>
+                  <input type="number" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))} style={{ width: 90, textAlign: 'right', border: '1px solid #E5E7EB', borderRadius: 6, padding: '3px 6px' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 800, color: saldoPendiente > 0 ? T.danger : T.secondary }}>
+                  <span>Saldo Pendiente:</span><span>{formatCurrency(saldoPendiente, settings.currency)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 10, color: '#78716C', fontStyle: 'italic', marginBottom: 20, textTransform: 'uppercase' }}>
+            Son: {numberToSpanishWords(total)}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 800, margin: '0 0 4px' }}>Datos Bancarios</p>
+              <p style={{ fontSize: 11, color: '#6B7280', margin: 0 }}>{settings.bankDetails || '—'}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 800, margin: '0 0 4px' }}>Notas</p>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Gracias por su confianza…"
+                style={{ width: '100%', fontSize: 11, color: '#374151', border: '1px solid #E5E7EB', borderRadius: 6, padding: 6, minHeight: 40 }} />
+            </div>
+          </div>
+
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, background: '#FFF9EC',
+            borderRadius: 8, padding: '8px 12px', marginBottom: 10, width: 'fit-content',
+          }}>
+            <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} />
+            Factura Recurrente Mensual
+          </label>
+
+          <p style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', marginTop: 24 }}>
+            Documento generado electrónicamente por Relevvo Studio
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 
