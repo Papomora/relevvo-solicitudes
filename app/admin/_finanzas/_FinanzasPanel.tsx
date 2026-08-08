@@ -127,6 +127,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export default function FinanzasPanel() {
   const [authReady, setAuthReady] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authStep, setAuthStep] = useState<'auth' | 'data' | 'done'>('auth')
   const [user, setUser] = useState<User | null>(null)
   const [sub, setSub] = useState<SubNav>('resumen')
 
@@ -148,10 +150,25 @@ export default function FinanzasPanel() {
   // ── Auth ──
   useEffect(() => {
     const unsub = initAuth(
-      (u) => { setUser(u); setAuthReady(true) },
-      () => { setUser(null); setAuthReady(true) },
+      (u) => { setUser(u); setAuthReady(true); setAuthStep('data') },
+      (err: any) => {
+        setUser(null); setAuthReady(true)
+        const code = err?.code || ''
+        setAuthError(
+          code.includes('admin-restricted-operation') || code.includes('operation-not-allowed')
+            ? 'El proveedor de autenticación anónima no está habilitado en este proyecto de Firebase.'
+            : `No se pudo conectar con Firebase (${code || 'error desconocido'}).`
+        )
+      },
     )
-    return () => unsub()
+    // Watchdog: if auth never resolves (success or failure) within 10s, something is hung.
+    const watchdog = setTimeout(() => {
+      setAuthReady(current => {
+        if (!current) setAuthError(prev => prev ?? 'La conexión está tardando demasiado. Revisa tu internet o vuelve a intentar.')
+        return current
+      })
+    }, 10000)
+    return () => { unsub(); clearTimeout(watchdog) }
   }, [])
 
   const { data: session } = useSession()
@@ -160,17 +177,27 @@ export default function FinanzasPanel() {
   // ── Firestore listeners (fixed shared path finanzas/{ORG_ID}/...) ──
   useEffect(() => {
     if (!user) return
+    let resolved = 0
+    const markResolved = () => { resolved++; if (resolved === 1) setAuthStep('done') }
+    const onErr = (label: string) => (err: any) => {
+      console.error(`Firestore listener failed (${label})`, err)
+      if (err?.code === 'permission-denied') {
+        setAuthError('Firestore rechazó el acceso (permission-denied). Las reglas de seguridad de Firestore probablemente no están desplegadas todavía — revisa app/admin/_finanzas/firestore.rules en la Consola de Firebase.')
+      } else {
+        setAuthError(`Error leyendo datos de Firestore (${label}): ${err?.message || err}`)
+      }
+    }
     const unsubs = [
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'clients'), snap => setClients(snap.docs.map(d => d.data() as Client))),
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'services'), snap => setServices(snap.docs.map(d => d.data() as ServiceItem))),
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'invoices'), snap => setInvoices(snap.docs.map(d => d.data() as Invoice))),
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'expenses'), snap => setExpenses(snap.docs.map(d => d.data() as Expense))),
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'employees'), snap => setEmployees(snap.docs.map(d => d.data() as Employee))),
-      onSnapshot(collection(db, 'finanzas', ORG_ID, 'payroll'), snap => setPayroll(snap.docs.map(d => d.data() as PayrollEntry))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'clients'), snap => { setClients(snap.docs.map(d => d.data() as Client)); markResolved() }, onErr('clients')),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'services'), snap => setServices(snap.docs.map(d => d.data() as ServiceItem)), onErr('services')),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'invoices'), snap => setInvoices(snap.docs.map(d => d.data() as Invoice)), onErr('invoices')),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'expenses'), snap => setExpenses(snap.docs.map(d => d.data() as Expense)), onErr('expenses')),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'employees'), snap => setEmployees(snap.docs.map(d => d.data() as Employee)), onErr('employees')),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'payroll'), snap => setPayroll(snap.docs.map(d => d.data() as PayrollEntry)), onErr('payroll')),
       // settings is a single doc, not a collection
       onSnapshot(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), snap => {
         if (snap.exists()) setSettings({ ...DEFAULT_SETTINGS, ...(snap.data() as AppSettings) })
-      }),
+      }, onErr('settings')),
     ]
     return () => unsubs.forEach(u => u())
   }, [user])
@@ -212,10 +239,31 @@ export default function FinanzasPanel() {
   // No user-facing login here: access is already gated by the /admin NextAuth
   // session. Firebase signs in anonymously in the background (see firebase.ts)
   // purely so Firestore's rules have a request.auth to check.
-  if (!authReady || !user) {
+  if (authStep !== 'done') {
+    const pct = authStep === 'auth' ? 30 : 70
+    const label = authStep === 'auth' ? 'Conectando con Firebase…' : 'Cargando datos financieros…'
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: T.muted }}>
-        <Icon name="progress_activity" /> &nbsp;Cargando finanzas…
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px' }}>
+        <Card style={{ maxWidth: 420, width: '100%', padding: 28 }}>
+          <p style={{ fontSize: 13, color: T.onSurf, fontWeight: 600, marginBottom: 12 }}>{authError ? 'Algo se bloqueó' : label}</p>
+          <div style={{ height: 6, borderRadius: 999, background: T.surface, overflow: 'hidden', marginBottom: 14 }}>
+            <div style={{
+              height: '100%', borderRadius: 999,
+              width: authError ? '100%' : `${pct}%`,
+              background: authError ? T.danger : `linear-gradient(90deg, ${T.primaryC}, ${T.primary})`,
+              transition: 'width .4s ease',
+            }} />
+          </div>
+          {!authError && (
+            <p style={{ fontSize: 11, color: T.muted }}>Paso {authStep === 'auth' ? '1' : '2'} de 2 — no cierres esta pestaña.</p>
+          )}
+          {authError && (
+            <div>
+              <p style={{ fontSize: 12, color: T.danger, lineHeight: 1.5, marginBottom: 14 }}>{authError}</p>
+              <button style={{ ...btnPrimary, width: '100%' }} onClick={() => window.location.reload()}>Reintentar</button>
+            </div>
+          )}
+        </Card>
       </div>
     )
   }

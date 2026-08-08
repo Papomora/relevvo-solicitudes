@@ -13,7 +13,7 @@ export const auth = getAuth(app)
 
 export const initAuth = (
   onAuthSuccess?: (user: User) => void,
-  onAuthFailure?: () => void
+  onAuthFailure?: (error?: unknown) => void
 ) => {
   const unsub = onAuthStateChanged(auth, (user: User | null) => {
     if (user) {
@@ -21,9 +21,12 @@ export const initAuth = (
     } else {
       signInAnonymously(auth).catch(err => {
         console.error('Anonymous sign-in failed', err)
-        if (onAuthFailure) onAuthFailure()
+        if (onAuthFailure) onAuthFailure(err)
       })
     }
+  }, err => {
+    console.error('onAuthStateChanged error', err)
+    if (onAuthFailure) onAuthFailure(err)
   })
   return unsub
 }
