@@ -2,11 +2,17 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { User } from 'firebase/auth'
+import { useSession } from 'next-auth/react'
 import {
   collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp,
 } from 'firebase/firestore'
-import { db, auth, initAuth, signInWithGoogle, logout } from './firebase'
+import { db, initAuth } from './firebase'
 import { formatCurrency, generateId } from './utils'
+
+// Fixed shared workspace path — this panel is internal-only (already gated
+// by the /admin NextAuth login), so the whole team reads/writes the same
+// Firestore data instead of a per-Google-account uid namespace.
+const ORG_ID = 'relevvo'
 import {
   Client, ServiceItem, Invoice, InvoiceItem, InvoiceStatus,
   Expense, ExpenseCategory, ExpenseStatus,
@@ -148,19 +154,21 @@ export default function FinanzasPanel() {
     return () => unsub()
   }, [])
 
-  // ── Firestore listeners (only when authenticated — data lives at users/{uid}/...) ──
+  const { data: session } = useSession()
+  const displayName = session?.user?.name || session?.user?.email || 'Equipo Relevvo'
+
+  // ── Firestore listeners (fixed shared path finanzas/{ORG_ID}/...) ──
   useEffect(() => {
     if (!user) return
-    const uid = user.uid
     const unsubs = [
-      onSnapshot(collection(db, 'users', uid, 'clients'), snap => setClients(snap.docs.map(d => d.data() as Client))),
-      onSnapshot(collection(db, 'users', uid, 'services'), snap => setServices(snap.docs.map(d => d.data() as ServiceItem))),
-      onSnapshot(collection(db, 'users', uid, 'invoices'), snap => setInvoices(snap.docs.map(d => d.data() as Invoice))),
-      onSnapshot(collection(db, 'users', uid, 'expenses'), snap => setExpenses(snap.docs.map(d => d.data() as Expense))),
-      onSnapshot(collection(db, 'users', uid, 'employees'), snap => setEmployees(snap.docs.map(d => d.data() as Employee))),
-      onSnapshot(collection(db, 'users', uid, 'payroll'), snap => setPayroll(snap.docs.map(d => d.data() as PayrollEntry))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'clients'), snap => setClients(snap.docs.map(d => d.data() as Client))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'services'), snap => setServices(snap.docs.map(d => d.data() as ServiceItem))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'invoices'), snap => setInvoices(snap.docs.map(d => d.data() as Invoice))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'expenses'), snap => setExpenses(snap.docs.map(d => d.data() as Expense))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'employees'), snap => setEmployees(snap.docs.map(d => d.data() as Employee))),
+      onSnapshot(collection(db, 'finanzas', ORG_ID, 'payroll'), snap => setPayroll(snap.docs.map(d => d.data() as PayrollEntry))),
       // settings is a single doc, not a collection
-      onSnapshot(doc(db, 'users', uid, 'settings', 'main'), snap => {
+      onSnapshot(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), snap => {
         if (snap.exists()) setSettings({ ...DEFAULT_SETTINGS, ...(snap.data() as AppSettings) })
       }),
     ]
@@ -170,20 +178,20 @@ export default function FinanzasPanel() {
   const logActivity = useCallback(async (action: string) => {
     if (!user) return
     try {
-      await addDoc(collection(db, 'users', user.uid, 'activity'), {
-        action, at: serverTimestamp(), by: user.displayName || user.email || 'Usuario',
+      await addDoc(collection(db, 'finanzas', ORG_ID, 'activity'), {
+        action, at: serverTimestamp(), by: displayName,
       })
     } catch (e) { console.error('logActivity failed', e) }
-  }, [user])
+  }, [user, displayName])
 
   // ── Generic Firestore save/delete helpers ──
   const save = useCallback(async (col: string, data: any) => {
     if (!user) return
-    await setDoc(doc(db, 'users', user.uid, col, data.id), data)
+    await setDoc(doc(db, 'finanzas', ORG_ID, col, data.id), data)
   }, [user])
   const remove = useCallback(async (col: string, id: string) => {
     if (!user) return
-    await deleteDoc(doc(db, 'users', user.uid, col, id))
+    await deleteDoc(doc(db, 'finanzas', ORG_ID, col, id))
   }, [user])
 
   // ── Derived totals ──
@@ -200,32 +208,14 @@ export default function FinanzasPanel() {
     return { ingresos, cobrado, porCobrar, gastos, gastosPagados, nominaMes, nominaPendiente, balance: cobrado - gastosPagados }
   }, [invoices, expenses, payroll])
 
-  // ── Login gate ──
-  if (!authReady) {
+  // ── Loading gate ──
+  // No user-facing login here: access is already gated by the /admin NextAuth
+  // session. Firebase signs in anonymously in the background (see firebase.ts)
+  // purely so Firestore's rules have a request.auth to check.
+  if (!authReady || !user) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: T.muted }}>
-        <Icon name="progress_activity" /> &nbsp;Cargando…
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px' }}>
-        <Card style={{ maxWidth: 420, textAlign: 'center', padding: 36 }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 16, margin: '0 auto 18px', background: 'linear-gradient(135deg,#7C3AED,#D2BBFF)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icon name="account_balance_wallet" size={28} /></div>
-          <h3 style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginBottom: 8 }}>Finanzas Relevvo</h3>
-          <p style={{ fontSize: 13, color: T.muted, marginBottom: 22, lineHeight: 1.5 }}>
-            Inicia sesión con tu cuenta Google de Relevvo para acceder a ingresos, gastos, nómina y pagos.
-            Los datos se guardan en la nube y persisten entre dispositivos.
-          </p>
-          <button style={{ ...btnPrimary, width: '100%' }} onClick={() => signInWithGoogle()}>
-            Ingresar con Google
-          </button>
-        </Card>
+        <Icon name="progress_activity" /> &nbsp;Cargando finanzas…
       </div>
     )
   }
@@ -250,8 +240,7 @@ export default function FinanzasPanel() {
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.muted }}>
-          <span>{user.displayName || user.email}</span>
-          <button style={btnGhost} onClick={() => logout()}>Salir</button>
+          <Icon name="account_circle" size={16} /><span>{displayName}</span>
         </div>
       </div>
 
@@ -319,7 +308,7 @@ export default function FinanzasPanel() {
       {sub === 'config' && (
         <ConfigView settings={settings} onSave={async (s) => {
           if (!user) return
-          await setDoc(doc(db, 'users', user.uid, 'settings', 'main'), s)
+          await setDoc(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), s)
           logActivity('Actualizó configuración')
         }} />
       )}
@@ -347,7 +336,7 @@ export default function FinanzasPanel() {
           onSave={async (inv, isNew) => {
             await save('invoices', inv)
             if (isNew) {
-              await setDoc(doc(db, 'users', user.uid, 'settings', 'main'), { ...settings, nextInvoiceNumber: settings.nextInvoiceNumber + 1 })
+              await setDoc(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), { ...settings, nextInvoiceNumber: settings.nextInvoiceNumber + 1 })
             }
             logActivity(`Guardó factura ${inv.number}`); setEditingInvoice(null)
           }}

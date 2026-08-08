@@ -3,24 +3,47 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Data Model — Finanzas Relevvo
+    // Data Model — Finanzas Relevvo (internal-only shared workspace)
     // ===============================================================
-    // users/{userId}/clients/{id}
-    // users/{userId}/services/{id}
-    // users/{userId}/invoices/{id}
-    // users/{userId}/expenses/{id}
-    // users/{userId}/employees/{id}      (Nómina — roster)
-    // users/{userId}/payroll/{id}        (Nómina — monthly entries)
-    // users/{userId}/settings/main       (single doc)
-    // users/{userId}/activity/{id}       (audit log, append-only)
+    // finanzas/{orgId}/clients/{id}
+    // finanzas/{orgId}/services/{id}
+    // finanzas/{orgId}/invoices/{id}
+    // finanzas/{orgId}/expenses/{id}
+    // finanzas/{orgId}/employees/{id}      (Nómina — roster)
+    // finanzas/{orgId}/payroll/{id}        (Nómina — monthly entries)
+    // finanzas/{orgId}/settings/main       (single doc)
+    // finanzas/{orgId}/activity/{id}       (audit log, append-only)
+    //
+    // SECURITY MODEL — READ THIS BEFORE CHANGING orgId ACCESS:
+    // This panel has NO user-facing login of its own. Access is gated one
+    // layer up, by /admin's NextAuth session (ADMIN_USER/ADMIN_PASSWORD).
+    // Firebase Auth here is anonymous and exists ONLY so these rules have a
+    // request.auth to check — it identifies "some client of this app",
+    // not a specific person.
+    //
+    // Because Firebase's public client config (apiKey, projectId, etc.) is
+    // not secret and ships in the browser bundle, anyone who extracts it
+    // could call signInAnonymously() against this same Firebase project
+    // from outside this app and then satisfy isSignedIn() below. The two
+    // real barriers against that are:
+    //   1. The strict per-collection field/type/enum validators below —
+    //      an attacker can at best write conforming documents, not
+    //      arbitrary payloads, and cannot read/write outside orgId scopes
+    //      this ruleset defines.
+    //   2. Restricting the Firebase Web API key to the production origin
+    //      (solicitudes.relevvostudio.com) in Google Cloud Console →
+    //      Credentials → the auto-generated "Browser key" for this
+    //      project. This blocks the key from being used from any other
+    //      origin/script even if copied. DO THIS MANUALLY — rules alone
+    //      cannot enforce request origin.
+    //   3. (Recommended) Enable Firebase App Check (reCAPTCHA v3) on this
+    //      project and flip enforcement on in the Firestore settings once
+    //      verified — this rejects any request not coming from the real
+    //      deployed app, closing the gap rules #1 alone leaves open.
     // ===============================================================
 
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -66,16 +89,6 @@ service cloud.firestore {
              isValidString('name', 1, 100) &&
              isValidString('description', 0, 500) &&
              isPositiveNumber('price');
-    }
-
-    function isValidInvoiceItem(item) {
-      return item is map &&
-             item.keys().hasOnly(['id', 'serviceName', 'quantity', 'unitPrice', 'total']) &&
-             item.id is string && item.id.size() <= 100 &&
-             item.serviceName is string && item.serviceName.size() <= 200 &&
-             item.quantity is number && item.quantity >= 0 &&
-             item.unitPrice is number && item.unitPrice >= 0 &&
-             item.total is number && item.total >= 0;
     }
 
     function isValidInvoiceItemsList() {
@@ -149,64 +162,70 @@ service cloud.firestore {
     }
 
     function isValidActivity() {
-      return request.resource.data.action is string && request.resource.data.action.size() <= 300 &&
-             request.resource.data.by is string;
+      return hasOnlyAllowedFields(['action', 'at', 'by']) &&
+             isValidString('action', 1, 300) &&
+             isValidString('by', 1, 150);
     }
 
     // ===============================================================
-    // Rules
+    // Rules — fixed org scope, any signed-in (incl. anonymous) client
     // ===============================================================
 
-    match /users/{userId} {
-      allow read, write: if isOwner(userId);
+    match /finanzas/{orgId} {
+      allow read, write: if false; // no data on the parent doc itself
 
       match /clients/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidClient();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidClient();
+        allow delete: if isSignedIn();
       }
 
       match /services/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidService();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidService();
+        allow delete: if isSignedIn();
       }
 
       match /invoices/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidInvoice();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidInvoice();
+        allow delete: if isSignedIn();
       }
 
       match /expenses/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidExpense();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidExpense();
+        allow delete: if isSignedIn();
       }
 
       match /employees/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidEmployee();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidEmployee();
+        allow delete: if isSignedIn();
       }
 
       match /payroll/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidPayrollEntry();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidPayrollEntry();
+        allow delete: if isSignedIn();
       }
 
       match /settings/{id} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidSettings();
-        allow delete: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidSettings();
+        allow delete: if isSignedIn();
       }
 
       match /activity/{id} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidActivity();
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidActivity();
         allow update, delete: if false; // audit log is append-only
       }
+    }
+
+    // Deny everything else in the project by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
