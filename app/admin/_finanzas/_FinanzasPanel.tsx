@@ -8,6 +8,10 @@ import {
 } from 'firebase/firestore'
 import { db, initAuth } from './firebase'
 import { formatCurrency, generateId } from './utils'
+import {
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
+  PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts'
 
 // Fixed shared workspace path — this panel is internal-only (already gated
 // by the /admin NextAuth login), so the whole team reads/writes the same
@@ -19,13 +23,13 @@ import {
   Employee, PayrollEntry, PayrollStatus, AppSettings,
 } from './types'
 
-// ── Design tokens (mirrors app/admin/page.tsx T object) ──────────
+// ── Design tokens — light/cream theme matching the original finanzapro app ──
 const T = {
-  bg: '#131313', sidebar: '#1C1B1B', card: 'rgba(255,255,255,0.04)', cardHigh: '#2A2A2A',
-  primary: '#D2BBFF', primaryC: '#7C3AED', secondary: '#41E575', tertiary: '#FFB0CD',
-  surface: '#201F1F', onSurf: '#E5E2E1', muted: '#8B96A2',
-  border: 'rgba(255,255,255,0.07)', borderMd: 'rgba(255,255,255,0.11)',
-  danger: '#F87171', warn: '#FBBF24',
+  bg: '#FFFDF5', sidebar: '#FFFFFF', card: '#FFFFFF', cardHigh: '#FFF8E7',
+  primary: '#7C3AED', primaryC: '#7C3AED', secondary: '#16A34A', tertiary: '#DB2777',
+  surface: '#FFF9EC', onSurf: '#1F2937', muted: '#78716C',
+  border: '#F0E6C8', borderMd: '#E7DAAE',
+  danger: '#DC2626', warn: '#D97706',
 }
 
 const inputStyle: React.CSSProperties = {
@@ -37,7 +41,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '.08em', display: 'block', marginBottom: 6,
 }
 const btnPrimary: React.CSSProperties = {
-  background: T.primaryC, color: '#fff', border: 'none', borderRadius: 10,
+  background: T.primaryC, color: T.onSurf, border: 'none', borderRadius: 10,
   padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
 }
 const btnGhost: React.CSSProperties = {
@@ -76,7 +80,8 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 function Card({ children, style = {} }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18, ...style,
+      background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18,
+      boxShadow: '0 1px 3px rgba(120,90,20,0.06)', ...style,
     }}>{children}</div>
   )
 }
@@ -92,7 +97,7 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
         padding: 24, width: '100%', maxWidth: wide ? 720 : 460, maxHeight: '88vh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{title}</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: T.onSurf }}>{title}</h3>
           <button onClick={onClose} style={iconBtn}><Icon name="close" size={18} /></button>
         </div>
         {children}
@@ -269,30 +274,39 @@ export default function FinanzasPanel() {
   }
 
   return (
-    <div>
+    <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 20, padding: '22px 24px 28px' }}>
       {/* header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {SUB_NAV.map(n => {
-            const active = sub === n.id
-            return (
-              <button key={n.id} onClick={() => setSub(n.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
-                border: `1px solid ${active ? T.primaryC : T.border}`,
-                background: active ? 'rgba(124,58,237,0.15)' : 'transparent',
-                color: active ? T.primary : T.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}>
-                <Icon name={n.icon} size={16} />{n.label}
-              </button>
-            )
-          })}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.muted }}>
-          <Icon name="account_circle" size={16} /><span>{displayName}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: T.onSurf }}>{SUB_NAV.find(n => n.id === sub)?.label === 'Resumen' ? 'Panel de Control' : SUB_NAV.find(n => n.id === sub)?.label}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: T.secondary,
+            background: `${T.secondary}18`, border: `1px solid ${T.secondary}40`, borderRadius: 999, padding: '5px 12px',
+          }}><Icon name="cloud_done" size={14} />Auditoría: Nube Conectada</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.muted }}>
+            <Icon name="account_circle" size={16} /><span>{displayName}</span>
+          </div>
         </div>
       </div>
 
-      {sub === 'resumen' && <ResumenView totals={totals} invoices={invoices} expenses={expenses} settings={settings} />}
+      {/* sub-nav */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+        {SUB_NAV.map(n => {
+          const active = sub === n.id
+          return (
+            <button key={n.id} onClick={() => setSub(n.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
+              border: `1px solid ${active ? T.primaryC : T.border}`,
+              background: active ? 'rgba(124,58,237,0.12)' : 'transparent',
+              color: active ? T.primary : T.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>
+              <Icon name={n.icon} size={16} />{n.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {sub === 'resumen' && <ResumenView totals={totals} invoices={invoices} expenses={expenses} settings={settings} clientCount={clients.length} />}
       {sub === 'facturas' && (
         <FacturasView
           invoices={invoices} clients={clients} services={services} settings={settings}
@@ -354,11 +368,28 @@ export default function FinanzasPanel() {
           onDelete={async (s) => { await remove('services', s.id); logActivity(`Eliminó servicio ${s.name}`) }} />
       )}
       {sub === 'config' && (
-        <ConfigView settings={settings} onSave={async (s) => {
-          if (!user) return
-          await setDoc(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), s)
-          logActivity('Actualizó configuración')
-        }} />
+        <ConfigView
+          settings={settings}
+          onSave={async (s) => {
+            if (!user) return
+            await setDoc(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), s)
+            logActivity('Actualizó configuración')
+          }}
+          getExportData={() => ({ clients, services, invoices, expenses, employees, payroll, settings, exportedAt: new Date().toISOString() })}
+          onImport={async (data) => {
+            if (!user) return
+            const writes: Promise<any>[] = []
+            for (const c of data.clients || []) writes.push(save('clients', c))
+            for (const s of data.services || []) writes.push(save('services', s))
+            for (const i of data.invoices || []) writes.push(save('invoices', i))
+            for (const e of data.expenses || []) writes.push(save('expenses', e))
+            for (const emp of data.employees || []) writes.push(save('employees', emp))
+            for (const p of data.payroll || []) writes.push(save('payroll', p))
+            if (data.settings) writes.push(setDoc(doc(db, 'finanzas', ORG_ID, 'settings', 'main'), data.settings))
+            await Promise.all(writes)
+            logActivity('Importó una copia de seguridad')
+          }}
+        />
       )}
 
       {/* ── Modals ── */}
@@ -409,66 +440,294 @@ export default function FinanzasPanel() {
 }
 
 // ────────────────────────────────────────────────────────────────
-// RESUMEN
+// RESUMEN — Panel de Control
 // ────────────────────────────────────────────────────────────────
-function ResumenView({ totals, invoices, expenses, settings }: {
-  totals: any; invoices: Invoice[]; expenses: Expense[]; settings: AppSettings
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+const monthLabel = (key: string) => {
+  const [y, m] = key.split('-').map(Number)
+  return `${MESES[m - 1]} de ${y}`
+}
+const lastNMonths = (n: number) => {
+  const out: string[] = []
+  const now = new Date()
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)))
+  }
+  return out
+}
+
+function ResumenView({ totals, invoices, expenses, settings, clientCount }: {
+  totals: any; invoices: Invoice[]; expenses: Expense[]; settings: AppSettings; clientCount: number
 }) {
   const cur = settings.currency || 'COP'
-  const stats = [
-    { label: 'Cobrado', value: totals.cobrado, color: T.secondary, icon: 'trending_up' },
-    { label: 'Por cobrar', value: totals.porCobrar, color: T.warn, icon: 'schedule' },
-    { label: 'Gastos pagados', value: totals.gastosPagados, color: T.danger, icon: 'trending_down' },
-    { label: 'Nómina pendiente', value: totals.nominaPendiente, color: T.primary, icon: 'badge' },
+  const [range, setRange] = useState<3 | 6 | 12>(6)
+  const [chartType, setChartType] = useState<'bar' | 'area' | 'line'>('area')
+  const months = useMemo(() => lastNMonths(range), [range])
+  const [selectedMonth, setSelectedMonth] = useState(months[months.length - 1])
+  useEffect(() => { setSelectedMonth(m => months.includes(m) ? m : months[months.length - 1]) }, [months])
+
+  const hasData = totals.cobrado > 0 || totals.gastosPagados > 0
+  const margenNeto = totals.balance
+  const salud = !hasData ? 100 : Math.max(0, Math.min(100, Math.round((totals.cobrado > 0 ? (margenNeto / totals.cobrado) * 100 : 0))))
+
+  const chartData = useMemo(() => months.map(key => {
+    const ingresos = invoices.filter(i => i.date.slice(0, 7) === key && i.status !== InvoiceStatus.CANCELLED && i.status !== InvoiceStatus.DRAFT)
+      .reduce((s, i) => s + (i.amountPaid || 0), 0)
+    const gastos = expenses.filter(e => e.date.slice(0, 7) === key).reduce((s, e) => s + e.amount, 0)
+    return { key, label: monthLabel(key).split(' de ')[0], Ingresos: ingresos, Gastos: gastos }
+  }), [months, invoices, expenses])
+
+  const invoiceDist = useMemo(() => {
+    const byStatus: Record<string, number> = {}
+    invoices.forEach(i => { byStatus[i.status] = (byStatus[i.status] || 0) + 1 })
+    return Object.entries(byStatus).map(([name, value]) => ({ name, value }))
+  }, [invoices])
+  const DIST_COLORS: Record<string, string> = {
+    [InvoiceStatus.PAID]: T.secondary, [InvoiceStatus.PENDING]: T.warn,
+    [InvoiceStatus.PARTIALLY_PAID]: T.primary, [InvoiceStatus.DRAFT]: T.muted, [InvoiceStatus.CANCELLED]: T.danger,
+  }
+
+  const gastosTotalMes = expenses.reduce((s, e) => s + e.amount, 0)
+  const nominaPct = gastosTotalMes > 0 ? Math.round((totals.nominaMes / gastosTotalMes) * 100) : 0
+  const porPagarGastos = totals.gastos - totals.gastosPagados
+
+  const monthInvoices = invoices.filter(i => i.date.slice(0, 7) === selectedMonth)
+  const monthExpenses = expenses.filter(e => e.date.slice(0, 7) === selectedMonth)
+  const monthIngresos = monthInvoices.reduce((s, i) => s + (i.amountPaid || 0), 0)
+  const monthEgresos = monthExpenses.reduce((s, e) => s + e.amount, 0)
+
+  const KPI = [
+    {
+      label: 'Ingresos Recibidos', value: totals.cobrado, color: T.secondary, icon: 'trending_up',
+      subA: ['Facturado Total:', totals.ingresos], subB: ['Por Cobrar:', totals.porCobrar],
+    },
+    {
+      label: 'Gastos Pagados', value: totals.gastosPagados, color: T.tertiary, icon: 'trending_down',
+      subA: ['Gastos Registrados:', totals.gastos], subB: ['Por Pagar:', porPagarGastos],
+    },
+    {
+      label: 'Gastos de Nómina', value: totals.nominaMes, color: T.primary, icon: 'groups',
+      subA: ['% del Total de Gastos:', null], subBRaw: `${nominaPct}%`,
+    },
+    {
+      label: 'Balance Neto de Caja', value: totals.balance, color: '#2563EB', icon: 'monitor_heart',
+      subA: ['Clientes Activos:', null], subBRaw: `${clientCount} registrados`,
+    },
   ]
-  const recent = [...invoices].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
-  const recentExp = [...expenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
+
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, marginBottom: 20 }}>
-        <Card style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(124,58,237,0.05))' }}>
-          <p style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>Balance (cobrado − gastos pagados)</p>
-          <p style={{ fontSize: 28, fontWeight: 900, color: totals.balance >= 0 ? T.secondary : T.danger }}>
-            {formatCurrency(totals.balance, cur)}
-          </p>
-        </Card>
-        {stats.map(s => (
-          <Card key={s.label}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: s.color }}>
-              <Icon name={s.icon} size={18} /><span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>{s.label}</span>
+      {/* Salud Financiera General */}
+      <Card style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <h4 style={{ fontSize: 14, fontWeight: 800, color: T.onSurf, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <Icon name="monitoring" size={18} />Salud Financiera General
+          </h4>
+          <p style={{ fontSize: 12, color: T.muted }}>Nivel basado en balance de caja real e ingresos acumulados vs egresos.</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ fontSize: 32, fontWeight: 900, color: T.primaryC, lineHeight: 1 }}>{salud}<span style={{ fontSize: 16 }}>%</span></p>
+          <p style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{!hasData ? 'SIN DATOS' : 'MARGEN'} · Margen Neto: {formatCurrency(margenNeto, cur)}</p>
+        </div>
+      </Card>
+
+      {/* KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14, marginBottom: 16 }}>
+        {KPI.map(k => (
+          <Card key={k.label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k.label}</span>
+              <Icon name={k.icon} size={20} />
             </div>
-            <p style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{formatCurrency(s.value, cur)}</p>
+            <p style={{ fontSize: 24, fontWeight: 900, color: k.color, marginBottom: 10 }}>{formatCurrency(k.value, cur)}</p>
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, fontSize: 11, color: T.muted, display: 'grid', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{k.subA[0]}</span>
+                <span style={{ color: T.onSurf, fontWeight: 600 }}>{k.subA[1] !== null ? formatCurrency(k.subA[1] as number, cur) : k.subBRaw}</span>
+              </div>
+              {k.subB && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{k.subB[0]}</span>
+                  <span style={{ color: T.onSurf, fontWeight: 600 }}>{formatCurrency(k.subB[1] as number, cur)}</span>
+                </div>
+              )}
+            </div>
           </Card>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+      {/* Flujo de caja + Distribución */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
         <Card>
-          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 12 }}>Últimas facturas</h4>
-          {recent.length === 0 && <p style={{ fontSize: 12, color: T.muted }}>Sin facturas registradas.</p>}
-          {recent.map(i => (
-            <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-              <span style={{ color: T.onSurf }}>{i.number} · {i.clientName}</span>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ color: T.muted }}>{formatCurrency(i.total, cur)}</span>
-                <Badge label={i.status} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 800, color: T.onSurf, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="water_drop" size={16} />Flujo de Caja Interactivo
+              </h4>
+              <p style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Selecciona un punto en el gráfico para ver el detalle mensual</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[3, 6, 12].map(n => (
+                  <button key={n} onClick={() => setRange(n as 3 | 6 | 12)} style={{
+                    fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                    border: `1px solid ${range === n ? T.primaryC : T.border}`,
+                    background: range === n ? 'rgba(124,58,237,0.1)' : 'transparent', color: range === n ? T.primary : T.muted,
+                  }}>{n}M</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 2, borderLeft: `1px solid ${T.border}`, paddingLeft: 8 }}>
+                {([['bar', 'bar_chart'], ['area', 'area_chart'], ['line', 'show_chart']] as const).map(([type, icon]) => (
+                  <button key={type} onClick={() => setChartType(type)} style={{
+                    ...iconBtn, width: 28, height: 28, borderRadius: 8,
+                    color: chartType === type ? T.primary : T.muted,
+                    borderColor: chartType === type ? T.primaryC : T.border,
+                  }}><Icon name={icon} size={15} /></button>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer>
+              {chartType === 'area' ? (
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="fIngresos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.35} /><stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="fGastos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={T.tertiary} stopOpacity={0.35} /><stop offset="95%" stopColor={T.tertiary} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`} />
+                  <Tooltip formatter={(v: any) => formatCurrency(Number(v), cur)} contentStyle={{ borderRadius: 10, border: `1px solid ${T.border}`, fontSize: 12 }} />
+                  <Area type="monotone" dataKey="Ingresos" stroke="#2563EB" fill="url(#fIngresos)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Gastos" stroke={T.tertiary} fill="url(#fGastos)" strokeWidth={2} />
+                </AreaChart>
+              ) : chartType === 'bar' ? (
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`} />
+                  <Tooltip formatter={(v: any) => formatCurrency(Number(v), cur)} contentStyle={{ borderRadius: 10, border: `1px solid ${T.border}`, fontSize: 12 }} />
+                  <Bar dataKey="Ingresos" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Gastos" fill={T.tertiary} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`} />
+                  <Tooltip formatter={(v: any) => formatCurrency(Number(v), cur)} contentStyle={{ borderRadius: 10, border: `1px solid ${T.border}`, fontSize: 12 }} />
+                  <Line type="monotone" dataKey="Ingresos" stroke="#2563EB" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Gastos" stroke={T.tertiary} strokeWidth={2} dot={false} />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+            <span style={{ fontSize: 11, color: T.muted, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: T.tertiary, display: 'inline-block' }} />Gastos</span>
+            <span style={{ fontSize: 11, color: T.muted, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: '#2563EB', display: 'inline-block' }} />Ingresos</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+            <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: 'uppercase', alignSelf: 'center', marginRight: 4 }}>Ver desglose del mes:</span>
+            {months.map(m => (
+              <button key={m} onClick={() => setSelectedMonth(m)} style={{
+                fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
+                border: 'none', background: selectedMonth === m ? T.primaryC : T.surface,
+                color: selectedMonth === m ? '#fff' : T.muted,
+              }}>{monthLabel(m).split(' de ')[0]} de {m.split('-')[0]}</button>
+            ))}
+          </div>
         </Card>
+
         <Card>
-          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 12 }}>Últimos gastos</h4>
-          {recentExp.length === 0 && <p style={{ fontSize: 12, color: T.muted }}>Sin gastos registrados.</p>}
-          {recentExp.map(e => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-              <span style={{ color: T.onSurf }}>{e.description} · {e.category}</span>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ color: T.muted }}>{formatCurrency(e.amount, cur)}</span>
-                <Badge label={e.status} />
-              </div>
+          <h4 style={{ fontSize: 13, fontWeight: 800, color: T.onSurf, marginBottom: 4 }}>Distribución de Facturas</h4>
+          <p style={{ fontSize: 11, color: T.muted, marginBottom: 10 }}>Estado general del cobro de cuentas en el sistema</p>
+          {invoiceDist.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, color: T.muted }}>
+              <Icon name="description" size={36} />
+              <p style={{ fontSize: 12, marginTop: 8 }}>Sin facturas registradas</p>
             </div>
-          ))}
+          ) : (
+            <div style={{ width: '100%', height: 200 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={invoiceDist} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                    {invoiceDist.map((d, idx) => <Cell key={idx} fill={DIST_COLORS[d.name] || T.muted} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${T.border}`, fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
       </div>
+
+      {/* Desglose del mes seleccionado */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: T.primary, background: 'rgba(124,58,237,0.1)',
+              borderRadius: 999, padding: '3px 10px', textTransform: 'uppercase',
+            }}>Desglose Detallado</span>
+            <h4 style={{ fontSize: 16, fontWeight: 800, color: T.onSurf, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="calendar_month" size={18} />Análisis Financiero: {monthLabel(selectedMonth)}
+            </h4>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: T.onSurf, background: T.surface,
+            borderRadius: 999, padding: '5px 12px',
+          }}>Balance neto del mes: {formatCurrency(monthIngresos - monthEgresos, cur)}</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 18 }}>
+          <Card style={{ background: `${T.secondary}0F`, border: `1px solid ${T.secondary}30` }}>
+            <p style={{ fontSize: 11, color: T.secondary, fontWeight: 700, marginBottom: 4 }}>INGRESOS DEL MES</p>
+            <p style={{ fontSize: 20, fontWeight: 900, color: T.onSurf }}>{formatCurrency(monthIngresos, cur)}</p>
+            <p style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>Registros recibidos en caja</p>
+          </Card>
+          <Card style={{ background: `${T.tertiary}0F`, border: `1px solid ${T.tertiary}30` }}>
+            <p style={{ fontSize: 11, color: T.tertiary, fontWeight: 700, marginBottom: 4 }}>EGRESOS DEL MES</p>
+            <p style={{ fontSize: 20, fontWeight: 900, color: T.onSurf }}>{formatCurrency(monthEgresos, cur)}</p>
+            <p style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>Pagos ejecutados</p>
+          </Card>
+          <Card style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.25)' }}>
+            <p style={{ fontSize: 11, color: '#2563EB', fontWeight: 700, marginBottom: 4 }}>FLUJO NETO MENSUAL</p>
+            <p style={{ fontSize: 20, fontWeight: 900, color: T.onSurf }}>{formatCurrency(monthIngresos - monthEgresos, cur)}</p>
+            <p style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>Balance de caja directo</p>
+          </Card>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 700, color: T.onSurf, marginBottom: 8 }}>● Cuentas de Cobro ({monthInvoices.length})</p>
+            {monthInvoices.length === 0 ? (
+              <p style={{ fontSize: 12, color: T.muted, textAlign: 'center', padding: 14, background: T.surface, borderRadius: 10 }}>No hay cuentas de cobro generadas para este mes.</p>
+            ) : monthInvoices.map(i => (
+              <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                <span style={{ color: T.onSurf }}>{i.number} · {i.clientName}</span>
+                <span style={{ color: T.muted }}>{formatCurrency(i.total, cur)}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 700, color: T.onSurf, marginBottom: 8 }}>● Gastos del mes ({monthExpenses.length})</p>
+            {monthExpenses.length === 0 ? (
+              <p style={{ fontSize: 12, color: T.muted, textAlign: 'center', padding: 14, background: T.surface, borderRadius: 10 }}>No hay gastos registrados para este mes.</p>
+            ) : monthExpenses.map(e => (
+              <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                <span style={{ color: T.onSurf }}>{e.description}</span>
+                <span style={{ color: T.muted }}>{formatCurrency(e.amount, cur)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }
@@ -484,7 +743,7 @@ function FacturasView({ invoices, clients, services, settings, onNew, onEdit, on
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Facturas / Ingresos</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: T.onSurf }}>Facturas / Ingresos</h3>
         <button style={btnPrimary} onClick={onNew}>+ Nueva factura</button>
       </div>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -492,7 +751,7 @@ function FacturasView({ invoices, clients, services, settings, onNew, onEdit, on
         {sorted.map(i => (
           <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{i.number} · {i.clientName}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.onSurf }}>{i.number} · {i.clientName}</p>
               <p style={{ fontSize: 11, color: T.muted }}>Vence {i.dueDate} · {formatCurrency(i.total, settings.currency)}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -582,7 +841,7 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, fontSize: 13, color: T.muted, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
           <span>Subtotal: {formatCurrency(subtotal, settings.currency)}</span>
           <span>Impuesto ({settings.taxRate}%): {formatCurrency(taxAmount, settings.currency)}</span>
-          <span style={{ color: '#fff', fontWeight: 800 }}>Total: {formatCurrency(total, settings.currency)}</span>
+          <span style={{ color: T.onSurf, fontWeight: 800 }}>Total: {formatCurrency(total, settings.currency)}</span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -605,22 +864,113 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
 // ────────────────────────────────────────────────────────────────
 // GASTOS
 // ────────────────────────────────────────────────────────────────
+const DIAS_SEMANA = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']
+function buildCalendarWeeks(year: number, month: number) {
+  const first = new Date(year, month, 1)
+  const startOffset = (first.getDay() + 6) % 7 // Monday-first
+  const gridStart = new Date(year, month, 1 - startOffset)
+  const weeks: Date[][] = []
+  for (let w = 0; w < 6; w++) {
+    const week: Date[] = []
+    for (let d = 0; d < 7; d++) week.push(new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + w * 7 + d))
+    weeks.push(week)
+  }
+  return weeks
+}
+const dstr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 function GastosView({ expenses, onNew, onEdit, onDelete, onToggleStatus }: {
   expenses: Expense[]; onNew: () => void; onEdit: (e: Expense) => void; onDelete: (e: Expense) => void; onToggleStatus: (e: Expense) => void
 }) {
-  const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date))
+  const [cursor, setCursor] = useState(new Date())
+  const [category, setCategory] = useState<string>('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  const filtered = expenses.filter(e =>
+    (!category || e.category === category) &&
+    (!from || e.date >= from) &&
+    (!to || e.date <= to)
+  )
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date))
+  const byDay = useMemo(() => {
+    const map: Record<string, Expense[]> = {}
+    filtered.forEach(e => { (map[e.date] ||= []).push(e) })
+    return map
+  }, [filtered])
+
+  const weeks = buildCalendarWeeks(cursor.getFullYear(), cursor.getMonth())
+  const monthName = cursor.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Gastos</h3>
-        <button style={btnPrimary} onClick={onNew}>+ Nuevo gasto</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: T.onSurf }}>Registro de Gastos</h3>
+        <button style={{ ...btnPrimary, background: T.tertiary }} onClick={onNew}>+ Registrar Gasto</button>
       </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+          <Field label="Categoría">
+            <select style={inputStyle} value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">Todas las categorías</option>
+              {Object.values(ExpenseCategory).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Desde"><input type="date" style={inputStyle} value={from} onChange={e => setFrom(e.target.value)} /></Field>
+          <Field label="Hasta"><input type="date" style={inputStyle} value={to} onChange={e => setTo(e.target.value)} /></Field>
+          <button style={{ ...btnGhost, height: 38 }} onClick={() => { setCategory(''); setFrom(''); setTo('') }}>Limpiar Filtros</button>
+        </div>
+      </Card>
+
+      <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `1px solid ${T.border}` }}>
+          <button style={iconBtn} onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}><Icon name="chevron_left" size={18} /></button>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 15, fontWeight: 800, color: T.onSurf, textTransform: 'capitalize' }}>{monthName}</p>
+            <p style={{ fontSize: 10, color: T.muted }}>Calendario de Flujo de Caja (Ingresos y Egresos)</p>
+          </div>
+          <button style={iconBtn} onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}><Icon name="chevron_right" size={18} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: `1px solid ${T.border}` }}>
+          {DIAS_SEMANA.map(d => (
+            <div key={d} style={{ padding: '8px 4px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: T.muted }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+          {weeks.flat().map((d, idx) => {
+            const key = dstr(d)
+            const inMonth = d.getMonth() === cursor.getMonth()
+            const isToday = key === todayStr()
+            const dayExpenses = byDay[key] || []
+            const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0)
+            return (
+              <div key={idx} style={{
+                minHeight: 88, padding: 8, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
+                background: isToday ? 'rgba(124,58,237,0.05)' : 'transparent', opacity: inMonth ? 1 : 0.35,
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, color: isToday ? '#fff' : T.onSurf,
+                  background: isToday ? T.primaryC : 'transparent', borderRadius: 999,
+                  padding: isToday ? '2px 7px' : 0, display: 'inline-block',
+                }}>{d.getDate()}</span>
+                {dayTotal > 0 && (
+                  <p style={{ fontSize: 10, color: T.tertiary, fontWeight: 700, marginTop: 6 }}>
+                    -{formatCurrency(dayTotal, 'COP')}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        {sorted.length === 0 && <p style={{ padding: 18, fontSize: 13, color: T.muted }}>No hay gastos registrados.</p>}
+        {sorted.length === 0 && <p style={{ padding: 18, fontSize: 13, color: T.muted }}>No hay gastos registrados con estos filtros.</p>}
         {sorted.map(e => (
           <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{e.description}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.onSurf }}>{e.description}</p>
               <p style={{ fontSize: 11, color: T.muted }}>{e.category} · {e.date} · {formatCurrency(e.amount, 'COP')}{e.isRecurring ? ' · Recurrente' : ''}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -690,17 +1040,17 @@ function NominaView({ employees, payroll, period, setPeriod, onNewEmployee, onEd
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Nómina</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: T.onSurf }}>Nómina</h3>
         <button style={btnPrimary} onClick={onNewEmployee}>+ Nuevo empleado</button>
       </div>
 
       <Card style={{ marginBottom: 18 }}>
-        <h4 style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 10 }}>Equipo</h4>
+        <h4 style={{ fontSize: 13, fontWeight: 700, color: T.onSurf, marginBottom: 10 }}>Equipo</h4>
         {employees.length === 0 && <p style={{ fontSize: 12, color: T.muted }}>Agrega tu primer empleado para empezar.</p>}
         {employees.map(e => (
           <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{e.name} {!e.active && <span style={{ color: T.muted, fontSize: 11 }}>(inactivo)</span>}</p>
+              <p style={{ fontSize: 13, color: T.onSurf, fontWeight: 600 }}>{e.name} {!e.active && <span style={{ color: T.muted, fontSize: 11 }}>(inactivo)</span>}</p>
               <p style={{ fontSize: 11, color: T.muted }}>{e.role} · {formatCurrency(e.baseSalary, 'COP')}/mes</p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -717,13 +1067,13 @@ function NominaView({ employees, payroll, period, setPeriod, onNewEmployee, onEd
             <input type="month" style={{ ...inputStyle, width: 160 }} value={period} onChange={e => setPeriod(e.target.value)} />
             <button style={btnGhost} onClick={onGenerate}>Generar nómina del mes</button>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Total periodo: {formatCurrency(periodTotal, 'COP')}</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: T.onSurf }}>Total periodo: {formatCurrency(periodTotal, 'COP')}</span>
         </div>
         {periodEntries.length === 0 && <p style={{ padding: 18, fontSize: 13, color: T.muted }}>Sin registros para este periodo. Genera la nómina arriba.</p>}
         {periodEntries.map(p => (
           <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{p.employeeName}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.onSurf }}>{p.employeeName}</p>
               <p style={{ fontSize: 11, color: T.muted }}>
                 Base {formatCurrency(p.baseSalary, 'COP')}
                 {p.bonuses ? ` · Bonos ${formatCurrency(p.bonuses, 'COP')}` : ''}
@@ -788,7 +1138,7 @@ function ClientesView({ clients, onNew, onEdit, onDelete }: {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Clientes</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: T.onSurf }}>Clientes</h3>
         <button style={btnPrimary} onClick={onNew}>+ Nuevo cliente</button>
       </div>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -796,7 +1146,7 @@ function ClientesView({ clients, onNew, onEdit, onDelete }: {
         {clients.map(c => (
           <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{c.name}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.onSurf }}>{c.name}</p>
               <p style={{ fontSize: 11, color: T.muted }}>{c.email} · {c.phone}</p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -848,7 +1198,7 @@ function ServiciosView({ services, onNew, onEdit, onDelete }: {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Servicios</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: T.onSurf }}>Servicios</h3>
         <button style={btnPrimary} onClick={onNew}>+ Nuevo servicio</button>
       </div>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -856,7 +1206,7 @@ function ServiciosView({ services, onNew, onEdit, onDelete }: {
         {services.map(s => (
           <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{s.name}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.onSurf }}>{s.name}</p>
               <p style={{ fontSize: 11, color: T.muted }}>{s.description}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -897,32 +1247,110 @@ function ServiceModal({ service, onClose, onSave }: { service: ServiceItem | nul
 // ────────────────────────────────────────────────────────────────
 // CONFIGURACIÓN
 // ────────────────────────────────────────────────────────────────
-function ConfigView({ settings, onSave }: { settings: AppSettings; onSave: (s: AppSettings) => void }) {
+function ConfigView({ settings, onSave, getExportData, onImport }: {
+  settings: AppSettings; onSave: (s: AppSettings) => void
+  getExportData: () => Record<string, unknown>; onImport: (data: any) => Promise<void>
+}) {
   const [form, setForm] = useState<AppSettings>(settings)
   useEffect(() => setForm(settings), [settings])
   const set = (k: keyof AppSettings, v: any) => setForm(f => ({ ...f, [k]: v }))
 
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(getExportData(), null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `finanzas-relevvo-${todayStr()}.json`; a.click()
+    URL.revokeObjectURL(url)
+  }
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(String(reader.result))
+        if (!confirm('Esto va a sobrescribir los registros existentes con los del archivo. ¿Continuar?')) return
+        await onImport(data)
+        alert('Datos importados correctamente.')
+      } catch (e) {
+        alert('El archivo no es un JSON válido de respaldo de Finanzas.')
+      }
+    }
+    reader.readAsText(file)
+  }
+
   return (
-    <div style={{ maxWidth: 560 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 14 }}>Configuración</h3>
+    <div style={{ maxWidth: 640, display: 'grid', gap: 16 }}>
       <Card>
-        <div style={{ display: 'grid', gap: 14 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 800, color: T.onSurf, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="settings" size={18} />Configuración de Empresa
+        </h4>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 18 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden',
+          }}>
+            {form.logoUrl
+              ? <img src={form.logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              : <span style={{ fontSize: 10, color: T.muted, textAlign: 'center' }}>Sin Logo</span>}
+          </div>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 700, color: T.onSurf, marginBottom: 2 }}>Logo / Foto de Perfil</p>
+            <p style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>Esta imagen aparecerá en tus facturas y documentos.</p>
+            <label style={{ ...btnGhost, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <Icon name="upload" size={14} />Subir Imagen
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                const file = e.target.files?.[0]; if (!file) return
+                const reader = new FileReader()
+                reader.onload = () => set('logoUrl', String(reader.result))
+                reader.readAsDataURL(file)
+              }} />
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <Field label="Nombre de la empresa"><input style={inputStyle} value={form.companyName} onChange={e => set('companyName', e.target.value)} /></Field>
           <Field label="NIT"><input style={inputStyle} value={form.companyNit} onChange={e => set('companyNit', e.target.value)} /></Field>
           <Field label="Dirección"><input style={inputStyle} value={form.companyAddress} onChange={e => set('companyAddress', e.target.value)} /></Field>
           <Field label="Email"><input style={inputStyle} value={form.companyEmail} onChange={e => set('companyEmail', e.target.value)} /></Field>
           <Field label="Teléfono"><input style={inputStyle} value={form.companyPhone} onChange={e => set('companyPhone', e.target.value)} /></Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Moneda"><input style={inputStyle} value={form.currency} onChange={e => set('currency', e.target.value)} /></Field>
-            <Field label="Impuesto (%)"><input type="number" style={inputStyle} value={form.taxRate} onChange={e => set('taxRate', Number(e.target.value))} /></Field>
+          <Field label="Moneda"><input style={inputStyle} value={form.currency} onChange={e => set('currency', e.target.value)} /></Field>
+          <Field label="Impuesto (%)"><input type="number" style={inputStyle} value={form.taxRate} onChange={e => set('taxRate', Number(e.target.value))} /></Field>
+          <Field label="Datos bancarios"><input style={inputStyle} value={form.bankDetails} onChange={e => set('bankDetails', e.target.value)} /></Field>
+          <Field label="Prefijo factura"><input style={inputStyle} value={form.invoicePrefix} onChange={e => set('invoicePrefix', e.target.value)} /></Field>
+          <Field label="Próximo consecutivo"><input type="number" style={inputStyle} value={form.nextInvoiceNumber} onChange={e => set('nextInvoiceNumber', Number(e.target.value))} /></Field>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <button style={btnPrimary} onClick={() => onSave(form)}>Guardar Configuración</button>
+        </div>
+      </Card>
+
+      <Card>
+        <h4 style={{ fontSize: 14, fontWeight: 800, color: T.onSurf, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="cached" size={18} />Copia de Seguridad y Restauración
+        </h4>
+        <p style={{ fontSize: 12, color: T.muted, marginBottom: 16 }}>
+          Descarga una copia completa de tus datos (clientes, facturas, gastos, nómina) para guardarla en tu Google Drive,
+          OneDrive o disco duro. Si algo sale mal, podrás restaurar todo usando este archivo.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ background: T.surface, borderRadius: 12, padding: 14 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: T.onSurf, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="download" size={16} />Exportar Datos
+            </p>
+            <p style={{ fontSize: 11, color: T.muted, marginBottom: 10 }}>Descargar archivo .JSON con toda tu información.</p>
+            <button style={{ ...btnPrimary, width: '100%' }} onClick={handleExport}>Descargar Copia de Seguridad</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Prefijo factura"><input style={inputStyle} value={form.invoicePrefix} onChange={e => set('invoicePrefix', e.target.value)} /></Field>
-            <Field label="Próximo consecutivo"><input type="number" style={inputStyle} value={form.nextInvoiceNumber} onChange={e => set('nextInvoiceNumber', Number(e.target.value))} /></Field>
-          </div>
-          <Field label="Datos bancarios"><textarea style={{ ...inputStyle, minHeight: 60 }} value={form.bankDetails} onChange={e => set('bankDetails', e.target.value)} /></Field>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button style={btnPrimary} onClick={() => onSave(form)}>Guardar cambios</button>
+          <div style={{ background: T.surface, borderRadius: 12, padding: 14 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: T.onSurf, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="upload_file" size={16} />Importar Copia
+            </p>
+            <p style={{ fontSize: 11, color: T.muted, marginBottom: 10 }}>Restaurar información desde un archivo guardado.</p>
+            <label style={{ ...btnGhost, width: '100%', display: 'block', textAlign: 'center', cursor: 'pointer', boxSizing: 'border-box' }}>
+              Seleccionar Archivo .JSON
+              <input type="file" accept="application/json" style={{ display: 'none' }} onChange={e => {
+                const file = e.target.files?.[0]; if (file) handleImportFile(file)
+              }} />
+            </label>
           </div>
         </div>
       </Card>
