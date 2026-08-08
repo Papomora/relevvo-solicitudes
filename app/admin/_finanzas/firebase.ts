@@ -8,7 +8,11 @@ import firebaseConfig from './firebase-applet-config.json'
 // Firestore's security rules (request.auth != null) — no user-facing
 // sign-in step is needed, so we sign in anonymously and silently.
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-export const db = getFirestore(app)
+// This project uses Firestore's multi-database feature — the finanzapro
+// data lives in a named database, not "(default)". Passing the id here is
+// required or every read/write silently targets a database that doesn't
+// have this data (or doesn't exist), which looked like a stuck spinner.
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
 export const auth = getAuth(app)
 
 export const initAuth = (
