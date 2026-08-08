@@ -208,6 +208,15 @@ function buildInvoiceHtml(invoice: Invoice, settings: AppSettings): string {
 // screenshotting a DOM node via html2canvas — html2canvas kept producing a
 // blank page for offscreen/hidden elements regardless of positioning, so this
 // sidesteps that whole class of bug.
+function loadImageSize(dataUrl: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+    img.onerror = reject
+    img.src = dataUrl
+  })
+}
+
 async function downloadInvoicePdf(invoice: Invoice, settings: AppSettings) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
@@ -216,13 +225,19 @@ async function downloadInvoicePdf(invoice: Invoice, settings: AppSettings) {
   const cur = settings.currency
   let y = 54
 
+  let logoBoxH = 34
   if (settings.logoUrl && settings.logoUrl.startsWith('data:image')) {
     try {
+      const { w, h } = await loadImageSize(settings.logoUrl)
+      const maxW = 110, maxH = 50
+      const scale = Math.min(maxW / w, maxH / h) // fit within box, keep aspect ratio (no stretching)
+      const drawW = w * scale, drawH = h * scale
       const fmt = settings.logoUrl.includes('image/png') ? 'PNG' : 'JPEG'
-      doc.addImage(settings.logoUrl, fmt, mx, y - 34, 90, 44)
+      doc.addImage(settings.logoUrl, fmt, mx, y - drawH, drawW, drawH)
+      logoBoxH = drawH
     } catch { /* corrupt/unsupported image data — skip silently, rest of doc still renders */ }
   }
-  y += 34
+  y += Math.max(logoBoxH, 20)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(31, 41, 55)
   doc.text('CUENTA DE COBRO', mx, y)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(107, 114, 128)
