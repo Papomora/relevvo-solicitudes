@@ -204,31 +204,125 @@ function buildInvoiceHtml(invoice: Invoice, settings: AppSettings): string {
   </div>`
 }
 
+// Draws the PDF directly with jsPDF (real text/vector drawing) instead of
+// screenshotting a DOM node via html2canvas — html2canvas kept producing a
+// blank page for offscreen/hidden elements regardless of positioning, so this
+// sidesteps that whole class of bug.
 async function downloadInvoicePdf(invoice: Invoice, settings: AppSettings) {
-  const html2pdf = (await import('html2pdf.js')).default
-  // html2canvas (which html2pdf.js uses internally) renders blank/white output
-  // for elements positioned far offscreen (e.g. left:-9999px) — keep the node
-  // inside the viewport but hidden behind everything via z-index instead.
-  const container = document.createElement('div')
-  container.style.position = 'fixed'
-  container.style.top = '0'
-  container.style.left = '0'
-  container.style.zIndex = '-9999'
-  container.style.pointerEvents = 'none'
-  container.innerHTML = buildInvoiceHtml(invoice, settings)
-  document.body.appendChild(container)
-  // Wait a frame so the browser has actually laid out/painted the node
-  // (including the logo <img>, if any) before html2canvas snapshots it.
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-  try {
-    await html2pdf().from(container).set({
-      margin: 0, filename: `${invoice.number}.pdf`,
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
-    }).save()
-  } finally {
-    document.body.removeChild(container)
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const mx = 42
+  const cur = settings.currency
+  let y = 54
+
+  if (settings.logoUrl && settings.logoUrl.startsWith('data:image')) {
+    try {
+      const fmt = settings.logoUrl.includes('image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(settings.logoUrl, fmt, mx, y - 34, 90, 44)
+    } catch { /* corrupt/unsupported image data — skip silently, rest of doc still renders */ }
   }
+  y += 34
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(31, 41, 55)
+  doc.text('CUENTA DE COBRO', mx, y)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(107, 114, 128)
+  doc.text(`No. ${invoice.number}`, mx, y + 14)
+
+  let ry = 54
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(31, 41, 55)
+  doc.text(settings.companyName || 'Relevvo Studio', pageW - mx, ry, { align: 'right' })
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(107, 114, 128)
+  ry += 13; doc.text(`NIT: ${settings.companyNit || '-'}`, pageW - mx, ry, { align: 'right' })
+  if (settings.companyAddress) { ry += 13; doc.text(settings.companyAddress, pageW - mx, ry, { align: 'right' }) }
+  if (settings.companyPhone) { ry += 13; doc.text(settings.companyPhone, pageW - mx, ry, { align: 'right' }) }
+
+  y = Math.max(y + 26, ry + 20)
+  doc.setDrawColor(31, 41, 55); doc.setLineWidth(1.2)
+  doc.line(mx, y, pageW - mx, y)
+  y += 24
+
+  doc.setFillColor(255, 249, 236)
+  doc.roundedRect(mx, y - 12, 260, 56, 6, 6, 'F')
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 113, 108)
+  doc.text('CLIENTE', mx + 14, y + 2)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(31, 41, 55)
+  doc.text(invoice.clientName || '—', mx + 14, y + 18)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(107, 114, 128)
+  doc.text(`NIT: ${invoice.clientNit || '-'}`, mx + 14, y + 32)
+
+  doc.setFontSize(9); doc.setTextColor(55, 65, 81)
+  doc.text(`Fecha de Emisión: ${fmtDate(invoice.date)}`, pageW - mx, y + 2, { align: 'right' })
+  doc.text(`Fecha de Vencimiento: ${fmtDate(invoice.dueDate)}`, pageW - mx, y + 18, { align: 'right' })
+
+  y += 66
+  doc.setFillColor(240, 230, 200)
+  doc.rect(mx, y, pageW - mx * 2, 20, 'F')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(31, 41, 55)
+  doc.text('Descripción', mx + 6, y + 14)
+  doc.text('Cant.', pageW - mx - 175, y + 14, { align: 'center' })
+  doc.text('Precio Unit.', pageW - mx - 95, y + 14, { align: 'right' })
+  doc.text('Total', pageW - mx - 4, y + 14, { align: 'right' })
+  y += 20
+
+  invoice.items.forEach(it => {
+    y += 20
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(31, 41, 55)
+    doc.text(it.serviceName || '—', mx + 6, y)
+    doc.text(String(it.quantity), pageW - mx - 175, y, { align: 'center' })
+    doc.text(formatCurrency(it.unitPrice, cur), pageW - mx - 95, y, { align: 'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.text(formatCurrency(it.total, cur), pageW - mx - 4, y, { align: 'right' })
+    doc.setDrawColor(238, 232, 213); doc.setLineWidth(0.7)
+    doc.line(mx, y + 6, pageW - mx, y + 6)
+  })
+
+  y += 32
+  const tx = pageW - mx
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(55, 65, 81)
+  doc.text('Subtotal', tx - 150, y); doc.text(formatCurrency(invoice.subtotal, cur), tx, y, { align: 'right' })
+  y += 15
+  doc.text(`IVA (${invoice.tax}%)`, tx - 150, y); doc.text(formatCurrency(invoice.taxAmount, cur), tx, y, { align: 'right' })
+  y += 8
+  doc.setDrawColor(31, 41, 55); doc.setLineWidth(1); doc.line(tx - 150, y, tx, y)
+  y += 18
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(31, 41, 55)
+  doc.text('Total', tx - 150, y); doc.text(formatCurrency(invoice.total, cur), tx, y, { align: 'right' })
+
+  y += 18
+  const saldo = invoice.total - (invoice.amountPaid || 0)
+  doc.setFillColor(255, 249, 236)
+  doc.roundedRect(tx - 160, y - 12, 160, 44, 6, 6, 'F')
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(55, 65, 81)
+  doc.text('Abonado', tx - 150, y)
+  doc.text(formatCurrency(invoice.amountPaid || 0, cur), tx - 8, y, { align: 'right' })
+  y += 16
+  doc.setFont('helvetica', 'bold')
+  if (saldo > 0) doc.setTextColor(220, 38, 38); else doc.setTextColor(22, 163, 74)
+  doc.text('Saldo Pendiente', tx - 150, y)
+  doc.text(formatCurrency(saldo, cur), tx - 8, y, { align: 'right' })
+
+  y += 36
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(120, 113, 108)
+  doc.text(`Son: ${numberToSpanishWords(invoice.total)}`, mx, y, { maxWidth: pageW - mx * 2 })
+
+  y += 22
+  if (settings.bankDetails) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(31, 41, 55)
+    doc.text('Datos Bancarios', mx, y)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(107, 114, 128)
+    doc.text(settings.bankDetails, mx, y + 12, { maxWidth: 250 })
+  }
+  if (invoice.notes) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(31, 41, 55)
+    doc.text('Notas', mx + 290, y)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(107, 114, 128)
+    doc.text(invoice.notes, mx + 290, y + 12, { maxWidth: 240 })
+  }
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(156, 163, 175)
+  doc.text('Documento generado electrónicamente por Relevvo Studio', pageW / 2, doc.internal.pageSize.getHeight() - 30, { align: 'center' })
+
+  doc.save(`${invoice.number}.pdf`)
 }
 
 const SUB_NAV = [
@@ -355,11 +449,15 @@ export default function FinanzasPanel() {
     const cobrado = invoices.reduce((s, i) => s + (i.amountPaid || 0), 0)
     const porCobrar = invoices.filter(i => i.status === InvoiceStatus.PENDING || i.status === InvoiceStatus.PARTIALLY_PAID)
       .reduce((s, i) => s + (i.total - (i.amountPaid || 0)), 0)
+    // Dinero en tránsito: facturas ya enviadas y en estado Pendiente (aún sin
+    // ningún abono) — dinero comprometido pero que todavía no entra a caja.
+    const enTransito = invoices.filter(i => i.status === InvoiceStatus.PENDING)
+      .reduce((s, i) => s + (i.total - (i.amountPaid || 0)), 0)
     const gastos = expenses.reduce((s, e) => s + e.amount, 0)
     const gastosPagados = expenses.filter(e => e.status === ExpenseStatus.PAID).reduce((s, e) => s + e.amount, 0)
     const nominaMes = payroll.filter(p => p.period === thisPeriod()).reduce((s, p) => s + p.total, 0)
     const nominaPendiente = payroll.filter(p => p.status === PayrollStatus.PENDING).reduce((s, p) => s + p.total, 0)
-    return { ingresos, cobrado, porCobrar, gastos, gastosPagados, nominaMes, nominaPendiente, balance: cobrado - gastosPagados }
+    return { ingresos, cobrado, porCobrar, enTransito, gastos, gastosPagados, nominaMes, nominaPendiente, balance: cobrado - gastosPagados }
   }, [invoices, expenses, payroll])
 
   // ── Loading gate ──
@@ -626,10 +724,16 @@ function ResumenView({ totals, invoices, expenses, settings, clientCount }: {
   const monthIngresos = monthInvoices.reduce((s, i) => s + (i.amountPaid || 0), 0)
   const monthEgresos = monthExpenses.reduce((s, e) => s + e.amount, 0)
 
+  const enTransitoCount = invoices.filter(i => i.status === InvoiceStatus.PENDING).length
+
   const KPI = [
     {
       label: 'Ingresos Recibidos', value: totals.cobrado, color: T.secondary, icon: 'trending_up',
       subA: ['Facturado Total:', totals.ingresos], subB: ['Por Cobrar:', totals.porCobrar],
+    },
+    {
+      label: 'Dinero en Tránsito', value: totals.enTransito, color: T.warn, icon: 'sync_alt',
+      subA: ['Facturas Pendientes:', null], subBRaw: `${enTransitoCount} factura${enTransitoCount === 1 ? '' : 's'}`,
     },
     {
       label: 'Gastos Pagados', value: totals.gastosPagados, color: T.tertiary, icon: 'trending_down',
