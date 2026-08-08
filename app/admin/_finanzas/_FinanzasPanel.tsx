@@ -226,6 +226,7 @@ export default function FinanzasPanel() {
   const [editingService, setEditingService] = useState<ServiceItem | null | 'new'>(null)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null | 'new'>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null | 'new'>(null)
+  const [newExpenseDate, setNewExpenseDate] = useState<string | null>(null)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null | 'new'>(null)
   const [payrollPeriod, setPayrollPeriod] = useState(thisPeriod())
 
@@ -399,12 +400,18 @@ export default function FinanzasPanel() {
       {sub === 'gastos' && (
         <GastosView
           expenses={expenses}
-          onNew={() => setEditingExpense('new')} onEdit={(e) => setEditingExpense(e)}
+          onNew={() => { setNewExpenseDate(null); setEditingExpense('new') }}
+          onQuickNew={(date) => { setNewExpenseDate(date); setEditingExpense('new') }}
+          onEdit={(e) => { setNewExpenseDate(null); setEditingExpense(e) }}
           onDelete={async (e) => { await remove('expenses', e.id); logActivity(`Eliminó gasto ${e.description}`) }}
           onToggleStatus={async (e) => {
             const nextStatus = e.status === ExpenseStatus.PAID ? ExpenseStatus.PENDING : ExpenseStatus.PAID
             await save('expenses', { ...e, status: nextStatus, amountPaid: nextStatus === ExpenseStatus.PAID ? e.amount : e.amountPaid })
             logActivity(`Actualizó estado de gasto ${e.description} a ${nextStatus}`)
+          }}
+          onMoveDate={async (e, date) => {
+            await save('expenses', { ...e, date })
+            logActivity(`Movió el gasto ${e.description} al ${date}`)
           }}
         />
       )}
@@ -501,6 +508,7 @@ export default function FinanzasPanel() {
       {editingExpense && (
         <ExpenseModal
           expense={editingExpense === 'new' ? null : editingExpense}
+          defaultDate={newExpenseDate}
           onClose={() => setEditingExpense(null)}
           onSave={async (e) => { await save('expenses', e); logActivity(`Guardó gasto ${e.description}`); setEditingExpense(null) }}
         />
@@ -1101,9 +1109,11 @@ function buildCalendarWeeks(year: number, month: number) {
 }
 const dstr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-function GastosView({ expenses, onNew, onEdit, onDelete, onToggleStatus }: {
-  expenses: Expense[]; onNew: () => void; onEdit: (e: Expense) => void; onDelete: (e: Expense) => void; onToggleStatus: (e: Expense) => void
+function GastosView({ expenses, onNew, onQuickNew, onEdit, onDelete, onToggleStatus, onMoveDate }: {
+  expenses: Expense[]; onNew: () => void; onQuickNew: (date: string) => void; onEdit: (e: Expense) => void
+  onDelete: (e: Expense) => void; onToggleStatus: (e: Expense) => void; onMoveDate: (e: Expense, date: string) => void
 }) {
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null)
   const [cursor, setCursor] = useState(new Date())
   const [category, setCategory] = useState<string>('')
   const [from, setFrom] = useState('')
@@ -1165,22 +1175,55 @@ function GastosView({ expenses, onNew, onEdit, onDelete, onToggleStatus }: {
             const inMonth = d.getMonth() === cursor.getMonth()
             const isToday = key === todayStr()
             const dayExpenses = byDay[key] || []
-            const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0)
+            const isDragOver = dragOverDay === key
             return (
-              <div key={idx} style={{
-                minHeight: 88, padding: 8, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
-                background: isToday ? 'rgba(124,58,237,0.05)' : 'transparent', opacity: inMonth ? 1 : 0.35,
-              }}>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, color: isToday ? '#fff' : T.onSurf,
-                  background: isToday ? T.primaryC : 'transparent', borderRadius: 999,
-                  padding: isToday ? '2px 7px' : 0, display: 'inline-block',
-                }}>{d.getDate()}</span>
-                {dayTotal > 0 && (
-                  <p style={{ fontSize: 10, color: T.tertiary, fontWeight: 700, marginTop: 6 }}>
-                    -{formatCurrency(dayTotal, 'COP')}
-                  </p>
-                )}
+              <div
+                key={idx}
+                onClick={() => { if (dayExpenses.length === 0) onQuickNew(key) }}
+                onDragOver={e => { e.preventDefault(); setDragOverDay(key) }}
+                onDragLeave={() => setDragOverDay(d => (d === key ? null : d))}
+                onDrop={e => {
+                  e.preventDefault()
+                  const expId = e.dataTransfer.getData('text/expense-id')
+                  const exp = expenses.find(x => x.id === expId)
+                  if (exp && exp.date !== key) onMoveDate(exp, key)
+                  setDragOverDay(null)
+                }}
+                style={{
+                  minHeight: 88, padding: 8, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
+                  background: isDragOver ? 'rgba(124,58,237,0.12)' : isToday ? 'rgba(124,58,237,0.05)' : 'transparent',
+                  opacity: inMonth ? 1 : 0.35, cursor: dayExpenses.length === 0 ? 'pointer' : 'default',
+                  outline: isDragOver ? `2px dashed ${T.primaryC}` : 'none', outlineOffset: -2,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: isToday ? '#fff' : T.onSurf,
+                    background: isToday ? T.primaryC : 'transparent', borderRadius: 999,
+                    padding: isToday ? '2px 7px' : 0, display: 'inline-block',
+                  }}>{d.getDate()}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); onQuickNew(key) }}
+                    title="Registrar gasto este día"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 0, lineHeight: 0 }}
+                  ><Icon name="add_circle" size={14} /></button>
+                </div>
+                <div style={{ display: 'grid', gap: 3, marginTop: 5 }}>
+                  {dayExpenses.map(exp => (
+                    <div
+                      key={exp.id}
+                      draggable
+                      onDragStart={e => e.dataTransfer.setData('text/expense-id', exp.id)}
+                      onClick={e => { e.stopPropagation(); onEdit(exp) }}
+                      title={`${exp.description} · ${formatCurrency(exp.amount, 'COP')} — clic para editar, arrastra para cambiar de fecha`}
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: T.tertiary, background: `${T.tertiary}12`,
+                        borderRadius: 6, padding: '2px 5px', cursor: 'grab', whiteSpace: 'nowrap',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}
+                    >-{formatCurrency(exp.amount, 'COP')}</div>
+                  ))}
+                </div>
               </div>
             )
           })}
@@ -1208,11 +1251,11 @@ function GastosView({ expenses, onNew, onEdit, onDelete, onToggleStatus }: {
   )
 }
 
-function ExpenseModal({ expense, onClose, onSave }: { expense: Expense | null; onClose: () => void; onSave: (e: Expense) => void }) {
+function ExpenseModal({ expense, defaultDate, onClose, onSave }: { expense: Expense | null; defaultDate?: string | null; onClose: () => void; onSave: (e: Expense) => void }) {
   const [description, setDescription] = useState(expense?.description || '')
   const [amount, setAmount] = useState(expense?.amount || 0)
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category || ExpenseCategory.OTHER)
-  const [date, setDate] = useState(expense?.date || todayStr())
+  const [date, setDate] = useState(expense?.date || defaultDate || todayStr())
   const [isRecurring, setIsRecurring] = useState(expense?.isRecurring || false)
   const [status, setStatus] = useState<ExpenseStatus>(expense?.status || ExpenseStatus.PENDING)
 
