@@ -206,15 +206,25 @@ function buildInvoiceHtml(invoice: Invoice, settings: AppSettings): string {
 
 async function downloadInvoicePdf(invoice: Invoice, settings: AppSettings) {
   const html2pdf = (await import('html2pdf.js')).default
+  // html2canvas (which html2pdf.js uses internally) renders blank/white output
+  // for elements positioned far offscreen (e.g. left:-9999px) — keep the node
+  // inside the viewport but hidden behind everything via z-index instead.
   const container = document.createElement('div')
   container.style.position = 'fixed'
-  container.style.left = '-9999px'
+  container.style.top = '0'
+  container.style.left = '0'
+  container.style.zIndex = '-9999'
+  container.style.pointerEvents = 'none'
   container.innerHTML = buildInvoiceHtml(invoice, settings)
   document.body.appendChild(container)
+  // Wait a frame so the browser has actually laid out/painted the node
+  // (including the logo <img>, if any) before html2canvas snapshots it.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   try {
     await html2pdf().from(container).set({
       margin: 0, filename: `${invoice.number}.pdf`,
-      html2canvas: { scale: 2 }, jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
     }).save()
   } finally {
     document.body.removeChild(container)
