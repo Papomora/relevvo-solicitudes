@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { handleIncomingMessage } from '@/lib/whatsapp-agent'
 import { prisma } from '@/lib/prisma'
+import { isTeamPhone, getTeamMemberName, saveBillingPdf } from '@/lib/billing-storage'
+import { sendWA } from '@/lib/whatsapp-send'
 
 export const runtime = 'nodejs'
 
@@ -90,6 +92,41 @@ export async function POST(req: NextRequest) {
       break
     default:
       return NextResponse.json({ ok: true })
+  }
+
+  // ── Billing PDF intercept ─────────────────────────────────────
+  // If the sender is a team member AND sent a PDF → save as cuenta de cobro
+  if (
+    isTeamPhone(phone) &&
+    msg.type === 'document' &&
+    mediaInfo &&
+    (mediaInfo.mimeType === 'application/pdf' || mediaInfo.ext === 'pdf')
+  ) {
+    try {
+      const memberName = getTeamMemberName(phone)
+      const { driveUrl } = await saveBillingPdf(mediaInfo.url, phone)
+
+      const yearMonth = new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+      const confirmMsg = driveUrl
+        ? `✅ ¡Listo ${memberName}! Tu cuenta de cobro de *${yearMonth}* fue guardada correctamente.\n📁 ${driveUrl}`
+        : `✅ ¡Listo ${memberName}! Tu cuenta de cobro de *${yearMonth}* fue recibida y guardada.`
+
+      await sendWA(phone, confirmMsg).catch(() => {})
+
+      // Also notify admin phones
+      const adminMsg = `📎 *Cuenta de cobro recibida*\n👤 ${memberName}\n📅 ${yearMonth}${driveUrl ? `\n📁 ${driveUrl}` : ''}`
+      for (let i = 1; i <= 3; i++) {
+        const p = process.env[`WHATSAPP_PHONE_${i}`]
+        const k = process.env[`WHATSAPP_APIKEY_${i}`]
+        if (p && k) {
+          fetch(`https://api.callmebot.com/whatsapp.php?phone=${p}&text=${encodeURIComponent(adminMsg)}&apikey=${k}`).catch(() => {})
+        }
+      }
+    } catch (e) {
+      console.error('[webhook] billing PDF handling failed:', e)
+      await sendWA(phone, '⚠️ Recibí tu PDF pero hubo un error al guardarlo. Avisa al admin.').catch(() => {})
+    }
+    return NextResponse.json({ ok: true })
   }
 
   // Await handler — fire-and-forget caused silent failures in serverless

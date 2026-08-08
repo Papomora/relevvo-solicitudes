@@ -79,3 +79,17 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, phone: normalized, messageId: msgId, whatsapp: !!msgId, waError: waError ?? null })
 }
+
+// DELETE — remove a prospecto session (admin dismisses failed/stale entries)
+export async function DELETE(req: NextRequest) {
+  const session = await auth()
+  const role = (session?.user as any)?.role
+  if (!session || role !== 'admin')
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+
+  await prisma.prospectoSession.delete({ where: { id: Number(id) } }).catch(() => {})
+  return NextResponse.json({ ok: true })
+}

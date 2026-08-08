@@ -14,13 +14,18 @@ export async function PATCH(
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const id = parseInt(params.id)
-  const { nombre, phone } = await req.json()
+  const { nombre, phone, rol, password } = await req.json()
   if (!nombre?.trim())
     return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
 
   const updated = await prisma.integrante.update({
     where: { id },
-    data: { nombre: nombre.trim(), ...(phone !== undefined && { phone: phone?.trim() || null }) },
+    data: {
+      nombre: nombre.trim(),
+      ...(phone !== undefined && { phone: phone?.trim() || null }),
+      ...(rol !== undefined && { rol: rol || null }),
+      ...(password !== undefined && { password: password || null }),
+    },
   })
   return NextResponse.json(updated)
 }

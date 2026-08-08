@@ -55,9 +55,9 @@ export async function POST(req: NextRequest) {
     data: { cliente, tipo, urgencia, descripcion, adjuntos: adjuntos ?? [] },
   })
 
-  // Rich team notification (fire-and-forget)
+  // Await team notification before responding — fire-and-forget was being killed by serverless
   const asig = ASIGNACION[tipo] ?? 'Equipo'
-  notifyTeam({ id: nueva.id, cliente, tipo, urgencia, descripcion, asignado: asig }).catch(() => {})
+  await notifyTeam({ id: nueva.id, cliente, tipo, urgencia, descripcion, asignado: asig }).catch(() => {})
 
   return NextResponse.json(nueva, { status: 201 })
 }

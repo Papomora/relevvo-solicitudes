@@ -37,6 +37,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
 
     Credentials({
+      id: 'team-member',
+      name: 'Equipo',
+      credentials: {
+        nombre:   { label: 'Usuario', type: 'text' },
+        password: { label: 'Contraseña', type: 'password' },
+      },
+      async authorize(credentials) {
+        const nombre   = (credentials?.nombre   as string)?.trim()
+        const password = (credentials?.password as string)?.trim()
+        if (!nombre || !password) return null
+        const m = await prisma.integrante.findUnique({ where: { nombre } })
+        if (!m || !m.password || m.password !== password) return null
+        return { id: `team-${m.id}`, name: m.nombre, role: 'team', rol: m.rol ?? '' } as any
+      },
+    }),
+
+    Credentials({
       id: 'admin-password',
       name: 'Admin',
       credentials: {

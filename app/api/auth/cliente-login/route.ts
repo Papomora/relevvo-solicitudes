@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CLIENT_PIN_MAP } from '@/lib/constants'
+import { CLIENT_PIN_MAP, CLIENTES } from '@/lib/constants'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
@@ -38,14 +38,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Demasiados intentos. Espera 5 minutos.' }, { status: 429 })
 
   const { cliente, pin } = await req.json()
-
-  const envKey = CLIENT_PIN_MAP[cliente as string]
-  if (!envKey)
+  if (!cliente || !pin)
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
-  const pinCorrecto = process.env[envKey]
-  if (!pinCorrecto || pin !== pinCorrecto)
-    return NextResponse.json({ error: 'PIN incorrecto' }, { status: 401 })
+  const clienteName = (cliente as string).trim()
 
-  return NextResponse.json({ ok: true, cliente })
+  // --- Real client: check env var PIN first, then DB override ---
+  const envKey = CLIENT_PIN_MAP[clienteName]
+  if (envKey) {
+    // Check DB override first (set via admin panel)
+    const dbEntry = await prisma.clientePin.findUnique({ where: { cliente: clienteName } })
+    const pinCorrecto = dbEntry?.pin ?? process.env[envKey] ?? ''
+    if (!pinCorrecto || pin !== pinCorrecto)
+      return NextResponse.json({ error: 'PIN incorrecto' }, { status: 401 })
+    return NextResponse.json({ ok: true, cliente: clienteName })
+  }
+
+  // --- Demo client: not in hardcoded list, must exist in ClientePin DB ---
+  if (!CLIENTES.includes(clienteName)) {
+    const dbEntry = await prisma.clientePin.findUnique({ where: { cliente: clienteName } })
+    if (!dbEntry)
+      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+    if (pin !== dbEntry.pin)
+      return NextResponse.json({ error: 'PIN incorrecto' }, { status: 401 })
+    return NextResponse.json({ ok: true, cliente: clienteName })
+  }
+
+  return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 }

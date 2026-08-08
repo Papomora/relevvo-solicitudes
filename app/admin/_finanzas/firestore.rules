@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Data Model — Finanzas Relevvo
+    // ===============================================================
+    // users/{userId}/clients/{id}
+    // users/{userId}/services/{id}
+    // users/{userId}/invoices/{id}
+    // users/{userId}/expenses/{id}
+    // users/{userId}/employees/{id}      (Nómina — roster)
+    // users/{userId}/payroll/{id}        (Nómina — monthly entries)
+    // users/{userId}/settings/main       (single doc)
+    // users/{userId}/activity/{id}       (audit log, append-only)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidEmail(email) {
+      return email is string && (email == "" || email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"));
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*$");
+    }
+
+    function isPositiveNumber(field) {
+      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidClient() {
+      return hasOnlyAllowedFields(['id', 'name', 'nit', 'email', 'phone', 'address', 'city', 'title', 'value', 'stage', 'paymentTerms']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('name', 1, 100) &&
+             isValidString('nit', 0, 50) &&
+             isValidEmail(request.resource.data.email) &&
+             isValidString('phone', 0, 50) &&
+             isValidString('address', 0, 200) &&
+             isValidString('city', 0, 100);
+    }
+
+    function isValidService() {
+      return hasOnlyAllowedFields(['id', 'name', 'description', 'price']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('name', 1, 100) &&
+             isValidString('description', 0, 500) &&
+             isPositiveNumber('price');
+    }
+
+    function isValidInvoiceItem(item) {
+      return item is map &&
+             item.keys().hasOnly(['id', 'serviceName', 'quantity', 'unitPrice', 'total']) &&
+             item.id is string && item.id.size() <= 100 &&
+             item.serviceName is string && item.serviceName.size() <= 200 &&
+             item.quantity is number && item.quantity >= 0 &&
+             item.unitPrice is number && item.unitPrice >= 0 &&
+             item.total is number && item.total >= 0;
+    }
+
+    function isValidInvoiceItemsList() {
+      let items = request.resource.data.items;
+      return items is list && items.size() <= 100;
+    }
+
+    function isValidInvoice() {
+      return hasOnlyAllowedFields(['id', 'number', 'clientId', 'clientName', 'clientNit', 'date', 'dueDate', 'items', 'subtotal', 'tax', 'taxAmount', 'total', 'amountPaid', 'status', 'notes', 'isRecurring']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('number', 1, 50) &&
+             isValidString('clientId', 1, 100) &&
+             isValidString('clientName', 1, 100) &&
+             isValidDateString(request.resource.data.date) &&
+             isValidDateString(request.resource.data.dueDate) &&
+             isValidInvoiceItemsList() &&
+             isPositiveNumber('subtotal') &&
+             isPositiveNumber('tax') &&
+             isPositiveNumber('taxAmount') &&
+             isPositiveNumber('total') &&
+             isPositiveNumber('amountPaid') &&
+             request.resource.data.status in ['Borrador', 'Pendiente', 'Pago Parcial', 'Pagada', 'Anulada'];
+    }
+
+    function isValidExpense() {
+      return hasOnlyAllowedFields(['id', 'description', 'amount', 'category', 'date', 'isRecurring', 'status', 'amountPaid']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('description', 1, 200) &&
+             isPositiveNumber('amount') &&
+             request.resource.data.category in ['Oficina', 'Software', 'Servicios Públicos', 'Nómina', 'Impuestos', 'Marketing', 'Otros'] &&
+             isValidDateString(request.resource.data.date) &&
+             request.resource.data.isRecurring is bool &&
+             request.resource.data.status in ['Pendiente', 'Pagado', 'Pago Parcial'];
+    }
+
+    function isValidEmployee() {
+      return hasOnlyAllowedFields(['id', 'name', 'role', 'baseSalary', 'bankAccount', 'bankName', 'active']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('name', 1, 100) &&
+             isValidString('role', 0, 100) &&
+             isPositiveNumber('baseSalary') &&
+             request.resource.data.active is bool;
+    }
+
+    function isValidPayrollEntry() {
+      return hasOnlyAllowedFields(['id', 'employeeId', 'employeeName', 'period', 'baseSalary', 'bonuses', 'deductions', 'total', 'status', 'paidDate', 'notes']) &&
+             isValidString('id', 1, 100) &&
+             isValidString('employeeId', 1, 100) &&
+             isValidString('employeeName', 1, 100) &&
+             request.resource.data.period is string && request.resource.data.period.matches("^\\d{4}-\\d{2}$") &&
+             isPositiveNumber('baseSalary') &&
+             request.resource.data.bonuses is number &&
+             request.resource.data.deductions is number &&
+             request.resource.data.total is number &&
+             request.resource.data.status in ['Pendiente', 'Pagado'];
+    }
+
+    function isValidSettings() {
+      return hasOnlyAllowedFields(['companyName', 'companyNit', 'companyAddress', 'companyEmail', 'companyPhone', 'currency', 'taxRate', 'logoUrl', 'bankDetails', 'invoicePrefix', 'nextInvoiceNumber']) &&
+             isValidString('companyName', 0, 100) &&
+             isValidString('companyNit', 0, 50) &&
+             isValidString('companyAddress', 0, 200) &&
+             isValidEmail(request.resource.data.companyEmail) &&
+             isValidString('companyPhone', 0, 50) &&
+             isValidString('currency', 1, 10) &&
+             isPositiveNumber('taxRate') &&
+             isValidString('logoUrl', 0, 1000000) &&
+             isValidString('bankDetails', 0, 500) &&
+             isValidString('invoicePrefix', 0, 20) &&
+             isPositiveNumber('nextInvoiceNumber');
+    }
+
+    function isValidActivity() {
+      return request.resource.data.action is string && request.resource.data.action.size() <= 300 &&
+             request.resource.data.by is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /clients/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidClient();
+        allow delete: if isOwner(userId);
+      }
+
+      match /services/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidService();
+        allow delete: if isOwner(userId);
+      }
+
+      match /invoices/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidInvoice();
+        allow delete: if isOwner(userId);
+      }
+
+      match /expenses/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidExpense();
+        allow delete: if isOwner(userId);
+      }
+
+      match /employees/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidEmployee();
+        allow delete: if isOwner(userId);
+      }
+
+      match /payroll/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidPayrollEntry();
+        allow delete: if isOwner(userId);
+      }
+
+      match /settings/{id} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidSettings();
+        allow delete: if isOwner(userId);
+      }
+
+      match /activity/{id} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidActivity();
+        allow update, delete: if false; // audit log is append-only
+      }
+    }
+  }
+}

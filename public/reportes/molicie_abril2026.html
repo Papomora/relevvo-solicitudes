@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Tu Mes en Redes — Molicie | Abril 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0C0C0F;--card:#16161A;--border:rgba(255,255,255,0.07);--p:#7C3AED;--s:#E91E8C;--ok:#22C55E;--err:#EF4444;--text:#F1F0EF;--muted:#6B7280;--r:16px}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:0}
+.header{background:linear-gradient(135deg,#1a0533 0%,#0c0c0f 60%);padding:40px 40px 32px;border-bottom:1px solid var(--border)}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:20px;margin-bottom:28px}
+.brand{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.15em;margin-bottom:6px}
+.client-name{font-size:36px;font-weight:900;color:#fff;letter-spacing:-.03em}
+.period{font-size:14px;color:var(--muted);margin-top:6px}
+.logo{font-size:13px;font-weight:800;color:var(--s)}.gen-date{font-size:11px;color:var(--muted);margin-top:4px}
+.score-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.score-card{background:rgba(124,58,237,0.12);border:2px solid rgba(124,58,237,0.4);border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:16px}
+.score-num{font-size:44px;font-weight:900;line-height:1;background:linear-gradient(135deg,#7C3AED,#E91E8C);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.score-desc{font-size:13px;color:var(--text);font-weight:500;max-width:200px;line-height:1.5}
+.stat-chip{border-radius:12px;padding:12px 18px;text-align:center}
+.chip-up{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3)}.chip-dn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3)}
+.chip-val{font-size:20px;font-weight:800}.chip-up .chip-val{color:#22C55E}.chip-dn .chip-val{color:#EF4444}
+.chip-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.tabs{display:flex;gap:8px;padding:24px 40px 0;background:var(--bg)}
+.tab{display:flex;align-items:center;gap:8px;padding:10px 22px;border-radius:12px 12px 0 0;border:1px solid var(--border);border-bottom:none;font-size:13px;font-weight:700;cursor:pointer;transition:.2s;background:var(--card);color:var(--muted)}
+.tab.active-fb{background:#1877F2;color:#fff;border-color:#1877F2}.tab.active-ig{background:linear-gradient(135deg,#833AB4,#E91E8C);color:#fff;border-color:#E91E8C}
+.tab-dot{width:8px;height:8px;border-radius:50%}.fb-dot{background:#1877F2}.ig-dot{background:linear-gradient(135deg,#833AB4,#E91E8C)}
+.main{padding:0 40px 40px}
+.platform-panel{display:none}.platform-panel.active{display:block}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:28px 0}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;transition:.25s}
+.kpi-card:hover{border-color:rgba(124,58,237,0.4);transform:translateY(-2px)}
+.kpi-icon{font-size:22px;margin-bottom:10px}.kpi-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.kpi-value{font-size:30px;font-weight:900;color:#fff;line-height:1;margin-bottom:8px}
+.kpi-trend{font-size:12px;font-weight:700;margin-bottom:8px}.trend-up{color:var(--ok)}.trend-dn{color:var(--err)}
+.kpi-explain{font-size:12px;color:var(--muted);line-height:1.5}
+.organic-row{background:rgba(14,165,233,0.06);border:1.5px solid rgba(14,165,233,0.35);border-radius:var(--r);padding:20px 24px;margin-bottom:24px;display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:20px;align-items:center}
+.org-label{font-size:11px;color:#0EA5E9;font-weight:800;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap}
+.org-metric{text-align:center}.org-metric-val{font-size:22px;font-weight:800;color:#fff}.org-metric-name{font-size:11px;color:#7DD3FC;margin-top:2px}
+.org-bar-wrap{grid-column:1/-1;margin-top:4px}.org-bar-label{font-size:11px;color:var(--muted);margin-bottom:6px}
+.bar-track{background:rgba(255,255,255,0.06);border-radius:99px;height:10px;overflow:hidden;display:inline-block}
+.bar-fill-org{background:#0EA5E9;height:100%;border-radius:99px}.bar-fill-paid{background:rgba(124,58,237,0.6);height:100%;border-radius:99px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.chart-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px}
+.chart-subtitle{font-size:11px;color:var(--muted);margin-bottom:16px}.chart-wrap{position:relative;height:180px}
+.section-title{font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px}
+.post-item{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;transition:.2s}
+.post-item:hover{border-color:rgba(124,58,237,0.3)}
+.post-rank{font-size:18px;font-weight:900;color:rgba(255,255,255,0.15);width:28px;text-align:center;flex-shrink:0}.post-rank.gold{color:#F59E0B}
+.post-info{flex:1;min-width:0}.post-title{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-date{font-size:11px;color:var(--muted);margin-top:2px}
+.post-stats{display:flex;gap:12px;flex-shrink:0}.post-stat{text-align:center}
+.post-stat-val{font-size:14px;font-weight:800;color:#fff}.post-stat-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.type-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;flex-shrink:0}
+.badge-reel{background:rgba(233,30,140,.15);color:#E91E8C}.badge-post{background:rgba(124,58,237,.15);color:#A78BFA}
+.insight-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.insight-card{border-radius:var(--r);padding:18px 20px}
+.ic-good{background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2)}.ic-opp{background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2)}
+.ic-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em}
+.ic-good .ic-header{color:var(--ok)}.ic-opp .ic-header{color:var(--err)}
+.ic-list{display:flex;flex-direction:column;gap:8px}
+.ic-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#D1D5DB;line-height:1.5}
+.ic-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:6px}
+.ic-good .ic-dot{background:var(--ok)}.ic-opp .ic-dot{background:var(--err)}
+.rec-card{background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(233,30,140,0.05));border:1.5px solid rgba(124,58,237,0.3);border-radius:var(--r);padding:24px 28px;margin-bottom:32px}
+.rec-title{font-size:13px;font-weight:800;color:var(--s);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}
+.rec-text{font-size:14px;color:#D1D5DB;line-height:1.8}
+/* History */
+.history-section{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:32px}
+.history-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text);margin-bottom:18px}
+.history-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.history-chart-wrap{position:relative;height:160px}
+footer{text-align:center;padding:28px 40px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:2}
+footer strong{color:var(--text)}
+@media(max-width:700px){.header,.main,.tabs{padding-left:20px;padding-right:20px}.kpi-grid,.charts-row,.insight-cards,.history-charts{grid-template-columns:1fr}.organic-row{grid-template-columns:1fr 1fr;row-gap:12px}.org-label,.org-bar-wrap{grid-column:1/-1}.client-name{font-size:28px}.score-row{flex-direction:column;align-items:flex-start}}
+@media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">Relevvo Studio · Informe mensual</div>
+      <div class="client-name">☁️ Molicie</div>
+      <div class="period">Abril 2026 · Facebook + Instagram</div>
+    </div>
+    <div style="text-align:right"><div class="logo">RELEVVO STUDIO</div><div class="gen-date" id="gdate"></div></div>
+  </div>
+  <div class="score-row">
+    <div class="score-card">
+      <div><div class="score-label">Nota del mes</div><div class="score-num">8.4</div></div>
+      <div class="score-desc">¡Excelente mes! Todas las métricas crecieron fuerte — especialmente en Facebook</div>
+    </div>
+    <div class="stat-chip chip-up"><div class="chip-val">↑ 119%</div><div class="chip-lbl">Viz. Facebook</div></div>
+    <div class="stat-chip chip-up"><div class="chip-val">↑ 253%</div><div class="chip-lbl">Interacciones FB</div></div>
+    <div class="stat-chip chip-up"><div class="chip-val">↑ 75%</div><div class="chip-lbl">Alcance IG</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active-fb" id="tab-fb" onclick="switchTab('fb')"><div class="tab-dot fb-dot"></div> Facebook</div>
+  <div class="tab" id="tab-ig" onclick="switchTab('ig')"><div class="tab-dot ig-dot"></div> Instagram</div>
+</div>
+
+<div class="main">
+
+  <!-- FB -->
+  <div class="platform-panel active" id="panel-fb">
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-icon">👁️</div><div class="kpi-label">Personas que vieron tu contenido</div><div class="kpi-value" data-count="591952"></div><div class="kpi-trend trend-up">↑ 119.5% vs marzo — ¡Se duplicó!</div><div class="kpi-explain">El doble de visualizaciones que en marzo. Excelente resultado de pauta.</div></div>
+      <div class="kpi-card"><div class="kpi-icon">❤️</div><div class="kpi-label">Personas que interactuaron</div><div class="kpi-value" data-count="2100"></div><div class="kpi-trend trend-up">↑ 252.9% vs marzo — ¡Increíble!</div><div class="kpi-explain">Más de 3 veces las interacciones de marzo (608). El contenido está conectando.</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📡</div><div class="kpi-label">Alcance real de la cuenta</div><div class="kpi-value" data-count="273618"></div><div class="kpi-trend trend-up">↑ 94.5% vs marzo</div><div class="kpi-explain">Casi el doble de personas únicas alcanzadas vs marzo (143K).</div></div>
+      <div class="kpi-card"><div class="kpi-icon">▶️</div><div class="kpi-label">Videos que captaron atención</div><div class="kpi-value" data-count="128"></div><div class="kpi-trend trend-up">↑ 66.2% vs marzo</div><div class="kpi-explain">Más personas iniciaron los videos. Las miniaturas están funcionando mejor.</div></div>
+    </div>
+    <div class="organic-row">
+      <div class="org-label">🔵 Orgánico<br>vs Pagado</div>
+      <div class="org-metric"><div class="org-metric-val">2.659</div><div class="org-metric-name">Sin pauta</div></div>
+      <div class="org-metric"><div class="org-metric-val">589.293</div><div class="org-metric-name">Con pauta</div></div>
+      <div class="org-metric"><div class="org-metric-val" style="color:#0EA5E9">0.4%</div><div class="org-metric-name">es orgánico</div></div>
+      <div class="org-bar-wrap">
+        <div class="org-bar-label">El crecimiento de abril fue casi 100% gracias a la pauta. El contenido orgánico aún es muy bajo.</div>
+        <div style="display:flex;gap:3px">
+          <div class="bar-track" style="width:0.4%"><div class="bar-fill-org" style="width:100%"></div></div>
+          <div class="bar-track" style="flex:1"><div class="bar-fill-paid" style="width:100%"></div></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:6px;font-size:11px;color:var(--muted)"><span style="color:#0EA5E9">● Orgánico (0.4%)</span><span style="color:#7C3AED">● Pagado (99.6%)</span></div>
+      </div>
+    </div>
+    <div class="section-title">🏆 Publicaciones destacadas</div>
+    <div class="post-item"><div class="post-rank gold">1</div><div class="post-info"><div class="post-title">"Es que no duermo bien." Lo hemos dicho...</div><div class="post-date">10 de abril · 10:00</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">323</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val" style="color:#22C55E">8</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="post-item"><div class="post-rank">2</div><div class="post-info"><div class="post-title">Hay noches en que simplemente... no...</div><div class="post-date">7 de abril · 23:10</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">80</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val">8</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="post-item"><div class="post-rank">3</div><div class="post-info"><div class="post-title">¿Cuántas veces te has despertado en la noche...?</div><div class="post-date">13 de abril · 10:01</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">74</div><div class="post-stat-lbl">vistas</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="charts-row" style="margin-top:24px">
+      <div class="chart-card"><div class="chart-title">Visualizaciones por tipo de contenido</div><div class="chart-subtitle">Abril 2026</div><div class="chart-wrap"><canvas id="fbTypeChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">¿Qué genera más reacciones?</div><div class="chart-subtitle">Interacciones por formato</div><div class="chart-wrap"><canvas id="fbIntChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- IG -->
+  <div class="platform-panel" id="panel-ig">
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-icon">👁️</div><div class="kpi-label">Personas que vieron tu contenido</div><div class="kpi-value" data-count="119236"></div><div class="kpi-trend trend-up">↑ 45.5% vs marzo</div><div class="kpi-explain">Casi 40K más visualizaciones que en marzo (85K). Buen crecimiento.</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📡</div><div class="kpi-label">Alcance real de la cuenta</div><div class="kpi-value" data-count="54300"></div><div class="kpi-trend trend-up">↑ 75.2% vs marzo — ¡Excelente!</div><div class="kpi-explain">El alcance más que se duplicó vs marzo (32K). Más personas nuevas descubriendo Molicie.</div></div>
+      <div class="kpi-card"><div class="kpi-icon">❤️</div><div class="kpi-label">Personas que interactuaron</div><div class="kpi-value" data-count="651"></div><div class="kpi-trend trend-up">↑ 43.7% vs marzo</div><div class="kpi-explain">Más likes, comentarios y guardados. Subió de 465 a 651 (+186 personas).</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-label">Publicaciones del mes</div><div class="kpi-value" data-count="7"></div><div class="kpi-trend" style="color:var(--muted)">7 posts · 0 historias</div><div class="kpi-explain">Sin historias en abril. Recuperar las historias puede mejorar el alcance orgánico.</div></div>
+    </div>
+    <div class="organic-row">
+      <div class="org-label">🔵 Orgánico<br>vs Pagado</div>
+      <div class="org-metric"><div class="org-metric-val">5.189</div><div class="org-metric-name">Sin pauta</div></div>
+      <div class="org-metric"><div class="org-metric-val">114.047</div><div class="org-metric-name">Con pauta</div></div>
+      <div class="org-metric"><div class="org-metric-val" style="color:#0EA5E9">4.4%</div><div class="org-metric-name">es orgánico</div></div>
+      <div class="org-bar-wrap">
+        <div class="org-bar-label">El orgánico subió de 4.963 a 5.189 (+7.1%) — leve mejora. Aún depende mucho de pauta.</div>
+        <div style="display:flex;gap:3px">
+          <div class="bar-track" style="width:4.4%"><div class="bar-fill-org" style="width:100%"></div></div>
+          <div class="bar-track" style="flex:1"><div class="bar-fill-paid" style="width:100%"></div></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:6px;font-size:11px;color:var(--muted)"><span style="color:#0EA5E9">● Orgánico (4.4%)</span><span style="color:#7C3AED">● Pagado (95.6%)</span></div>
+      </div>
+    </div>
+    <div class="section-title">🏆 Publicaciones destacadas</div>
+    <div class="post-item"><div class="post-rank gold">1</div><div class="post-info"><div class="post-title">Hay noches en que simplemente... no...</div><div class="post-date">7 de abril · 23:10</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">323</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val" style="color:#22C55E">8</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="post-item"><div class="post-rank">2</div><div class="post-info"><div class="post-title">¿Cuántas veces te has despertado en la noche...?</div><div class="post-date">13 de abril · 10:01</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">277</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val">9</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="post-item"><div class="post-rank">3</div><div class="post-info"><div class="post-title">"Es que no duermo bien." Lo hemos dicho...</div><div class="post-date">10 de abril · 10:00</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">257</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val">3</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="post-item"><div class="post-rank">4</div><div class="post-info"><div class="post-title">Algunas almohadas duran una temporada...</div><div class="post-date">15 de abril · 10:02</div></div><div class="post-stats"><div class="post-stat"><div class="post-stat-val">205</div><div class="post-stat-lbl">vistas</div></div><div class="post-stat"><div class="post-stat-val">6</div><div class="post-stat-lbl">likes</div></div></div><div class="type-badge badge-post">Post</div></div>
+    <div class="charts-row" style="margin-top:24px">
+      <div class="chart-card"><div class="chart-title">Crecimiento mes a mes</div><div class="chart-subtitle">Visualizaciones IG: Marzo vs Abril</div><div class="chart-wrap"><canvas id="igGrowthChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Origen de visualizaciones</div><div class="chart-subtitle">Orgánico vs con pauta</div><div class="chart-wrap"><canvas id="igOrgChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div class="insight-cards" style="margin-top:24px">
+    <div class="insight-card ic-good">
+      <div class="ic-header">✅ Lo que funcionó muy bien</div>
+      <div class="ic-list">
+        <div class="ic-item"><div class="ic-dot"></div><span>Facebook tuvo su mejor mes — visualizaciones <strong>+119%</strong> e interacciones <strong>+253%</strong></span></div>
+        <div class="ic-item"><div class="ic-dot"></div><span>El alcance en Instagram casi se <strong>duplicó</strong> vs marzo (32K → 54K)</span></div>
+        <div class="ic-item"><div class="ic-dot"></div><span>El orgánico en IG creció <strong>+7.1%</strong> — pequeño pero positivo</span></div>
+        <div class="ic-item"><div class="ic-dot"></div><span>Las interacciones en IG subieron <strong>43.7%</strong> — más gente reacciona al contenido</span></div>
+      </div>
+    </div>
+    <div class="insight-card ic-opp">
+      <div class="ic-header">📌 Dónde mejorar</div>
+      <div class="ic-list">
+        <div class="ic-item"><div class="ic-dot"></div><span>En IG no se publicaron <strong>historias</strong> en todo abril — las historias generan mucho alcance orgánico</span></div>
+        <div class="ic-item"><div class="ic-dot"></div><span>El orgánico en FB cayó a <strong>0.4%</strong> — prácticamente todo depende de pauta</span></div>
+        <div class="ic-item"><div class="ic-dot"></div><span>Las vistas por post en IG son bajas (200-320) — el copy puede ser más directo</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rec-card">
+    <div class="rec-title">💡 Para el próximo mes — Mayo 2026</div>
+    <div class="rec-text">Volver a publicar historias en Instagram (en marzo tuviste 9 — fueron clave para el alcance orgánico). Los copys emocionales sobre el sueño y el descanso están funcionando muy bien — seguir esa línea. Agregar una <strong>pregunta al final de cada caption</strong> ("¿A ti te pasa?", "¿Cuánto tiempo llevas sin dormir bien?") para aumentar los comentarios y hacer crecer el alcance orgánico.</div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="history-section">
+    <div class="history-title">📅 Molicie mes a mes</div>
+    <div class="history-charts">
+      <div>
+        <div class="chart-title" style="margin-bottom:4px">Facebook — Visualizaciones</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Marzo vs Abril 2026</div>
+        <div class="history-chart-wrap"><canvas id="histFbViz"></canvas></div>
+      </div>
+      <div>
+        <div class="chart-title" style="margin-bottom:4px">Instagram — Alcance</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Marzo vs Abril 2026</div>
+        <div class="history-chart-wrap"><canvas id="histIgAlc"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Preparado por <strong>Relevvo Studio</strong> para Molicie &nbsp;·&nbsp; hola@relevvostudio.com &nbsp;·&nbsp; +57 322 309 4005</footer>
+
+<script>
+document.getElementById('gdate').textContent = new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
+const chartsInit={fb:false,ig:false};
+function switchTab(p){['fb','ig'].forEach(x=>{document.getElementById('panel-'+x).classList.remove('active');document.getElementById('tab-'+x).className='tab';});document.getElementById('panel-'+p).classList.add('active');document.getElementById('tab-'+p).className='tab active-'+p;if(!chartsInit[p]){initCharts(p);chartsInit[p]=true;}}
+function animateCounters(){document.querySelectorAll('[data-count]').forEach(el=>{const t=+el.dataset.count,d=1200;let s=null;function step(ts){if(!s)s=ts;const p=Math.min((ts-s)/d,1);el.textContent=Math.floor(p*t).toLocaleString('es-CO');if(p<1)requestAnimationFrame(step);else el.textContent=t.toLocaleString('es-CO');}requestAnimationFrame(step);});}
+const gc='rgba(255,255,255,0.06)',tc='#6B7280';
+const bb={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:gc},ticks:{color:tc,callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}},x:{grid:{display:false},ticks:{color:tc}}}};
+function initCharts(p){
+  if(p==='fb'){
+    new Chart(document.getElementById('fbTypeChart').getContext('2d'),{type:'bar',data:{labels:['Links','Reels','Otros','Foto'],datasets:[{data:[506287,57949,25913,1433],backgroundColor:['#7C3AED','#E91E8C','#A855F7','#0EA5E9'],borderRadius:10,borderSkipped:false}]},options:bb});
+    new Chart(document.getElementById('fbIntChart').getContext('2d'),{type:'doughnut',data:{labels:['Links','Reels','Foto'],datasets:[{data:[1635,417,12],backgroundColor:['#7C3AED','#E91E8C','#0EA5E9'],borderWidth:0,hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:true,position:'right',labels:{color:tc,font:{size:11},padding:14}}}}});
+  }
+  if(p==='ig'){
+    new Chart(document.getElementById('igGrowthChart').getContext('2d'),{type:'bar',data:{labels:['Marzo','Abril'],datasets:[{data:[85079,119236],backgroundColor:['rgba(233,30,140,0.4)','#E91E8C'],borderRadius:10,borderSkipped:false}]},options:bb});
+    new Chart(document.getElementById('igOrgChart').getContext('2d'),{type:'doughnut',data:{labels:['Con pauta','Orgánico'],datasets:[{data:[114047,5189],backgroundColor:['#7C3AED','#0EA5E9'],borderWidth:0,hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:true,position:'right',labels:{color:tc,font:{size:11},padding:14}}}}});
+  }
+}
+new Chart(document.getElementById('histFbViz').getContext('2d'),{type:'bar',data:{labels:['Marzo','Abril'],datasets:[{data:[277057,591952],backgroundColor:['rgba(124,58,237,0.5)','#7C3AED'],borderRadius:10,borderSkipped:false}]},options:{...bb,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toLocaleString('es-CO')+' vistas'}}}}});
+new Chart(document.getElementById('histIgAlc').getContext('2d'),{type:'bar',data:{labels:['Marzo','Abril'],datasets:[{data:[32400,54300],backgroundColor:['rgba(233,30,140,0.5)','#E91E8C'],borderRadius:10,borderSkipped:false}]},options:{...bb,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toLocaleString('es-CO')+' personas'}}}}});
+initCharts('fb');chartsInit.fb=true;animateCounters();
+</script>
+</body>
+</html>

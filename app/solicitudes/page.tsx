@@ -21,15 +21,15 @@ const T = {
   bg:       '#131313',
   sidebar:  '#1C1B1B',
   surface:  '#201F1F',
-  cardLow:  '#1C1B1B',
+  cardLow:  'rgba(255,255,255,0.03)',
   cardHigh: '#2A2A2A',
   primary:  '#D2BBFF',
   primaryC: '#7C3AED',
   secondary:'#41E575',
   tertiary: '#FFB0CD',
   onSurf:   '#E5E2E1',
-  muted:    '#6B7280',
-  border:   'rgba(255,255,255,0.05)',
+  muted:    '#8B96A2',
+  border:   'rgba(255,255,255,0.07)',
 }
 
 function Icon({ name, filled = false, size = 20 }: { name: string; filled?: boolean; size?: number }) {
@@ -48,11 +48,14 @@ function StatusBadge({ estado }: { estado: string }) {
   const c = info.color
   return (
     <span style={{
-      display:'inline-flex', alignItems:'center', gap:5,
+      display:'inline-flex', alignItems:'center', gap:5, flexShrink:0, whiteSpace:'nowrap',
       padding:'3px 10px', borderRadius:999,
       fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'.08em',
-      background:`${c}15`, color:c,
-    }}>{info.label}</span>
+      background:`${c}15`, color:c, border:`1px solid ${c}30`,
+    }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background:c, display:'inline-block', flexShrink:0 }}/>
+      {info.label}
+    </span>
   )
 }
 
@@ -136,6 +139,7 @@ export default function SolicitudesPage() {
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"/>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"/>
+      <style>{`@keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       <div style={{ minHeight:'100vh', background:T.bg, fontFamily:"'Inter', system-ui, sans-serif", color:T.onSurf, display:'flex' }}>
 
@@ -357,23 +361,33 @@ export default function SolicitudesPage() {
               </div>
 
               {solicitudes.length === 0 ? (
-                <p style={{ fontSize:14, color:T.muted, textAlign:'center', padding:'48px 0' }}>Aún no tienes solicitudes enviadas.</p>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 12 : 20 }}>
-                  {solicitudes.slice(0, 6).map(s => {
-                    const est = ESTADOS.find(e => e.value === s.estado) ?? ESTADOS[0]
-                    return (
-                      <div key={s.id} style={{
-                        background:T.cardLow, borderRadius:16, padding:24,
-                        display:'flex', flexDirection:'column', gap:16,
-                        position:'relative', overflow:'hidden', cursor:'default',
-                        transition:'background .2s',
-                      }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background=T.cardHigh}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=T.cardLow}
-                      >
-                        {/* Ambient glow */}
-                        <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100, background:`${est.color}08`, borderRadius:'50%', filter:'blur(30px)' }}/>
+                <div style={{ textAlign:'center', padding:'64px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+                  <div style={{ width:60, height:60, borderRadius:18, background:'rgba(124,58,237,0.1)', border:'1px solid rgba(124,58,237,0.2)', display:'flex', alignItems:'center', justifyContent:'center', color:'#D2BBFF', marginBottom:8 }}>
+                    <Icon name="rocket_launch" size={30} filled/>
+                  </div>
+                  <p style={{ fontSize:16, fontWeight:700, color:'rgba(255,255,255,0.7)' }}>¡Empecemos! 🚀</p>
+                  <p style={{ fontSize:13, color:T.muted, maxWidth:320, textAlign:'center', lineHeight:1.6 }}>Aún no tienes solicitudes. Envía la primera arriba y nos ponemos a trabajar.</p>
+                </div>
+              ) : (() => {
+                const activas     = solicitudes.filter(s => s.estado !== 'completada' && s.estado !== 'cancelado')
+                const completadas = solicitudes.filter(s => s.estado === 'completada')
+                const renderCard  = (s: Solicitud, idx: number, isCompletada = false) => {
+                  const est = ESTADOS.find(e => e.value === s.estado) ?? ESTADOS[0]
+                  return (
+                    <div key={s.id} style={{
+                      background: isCompletada ? 'rgba(65,229,117,0.04)' : T.cardLow,
+                      borderRadius:16, padding:24,
+                      display:'flex', flexDirection:'column', gap:16,
+                      position:'relative', overflow:'hidden', cursor:'default',
+                      border: isCompletada ? '1px solid rgba(65,229,117,0.15)' : `1px solid ${T.border}`,
+                      transition:'border-color .2s',
+                      animation:`cardIn 220ms ease-out ${idx * 40}ms both`,
+                    }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = isCompletada ? 'rgba(65,229,117,0.35)' : 'rgba(255,255,255,0.14)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = isCompletada ? 'rgba(65,229,117,0.15)' : T.border }}
+                    >
+                      {/* Ambient glow */}
+                      <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100, background:`${est.color}08`, borderRadius:'50%', filter:'blur(30px)' }}/>
 
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                           <StatusBadge estado={s.estado}/>
@@ -413,15 +427,41 @@ export default function SolicitudesPage() {
                             R
                           </div>
                           <span style={{ fontSize:10, color:T.muted }}>Relevvo Studio</span>
-                          <span style={{ fontSize:10, color:'#374151', marginLeft:'auto' }}>
+                          <span style={{ fontSize:10, color:T.muted, marginLeft:'auto' }}>
                             {new Date(s.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}
                           </span>
                         </div>
                       </div>
                     )
-                  })}
-                </div>
-              )}
+                  }
+
+                  return (
+                    <>
+                      {activas.length > 0 && (
+                        <>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+                            <span style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'.1em' }}>En progreso</span>
+                            <span style={{ fontSize:11, padding:'1px 8px', borderRadius:99, background:'rgba(96,165,250,0.12)', color:'#60A5FA', fontWeight:700 }}>{activas.length}</span>
+                          </div>
+                          <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 12 : 20, marginBottom: completadas.length > 0 ? 32 : 0 }}>
+                            {activas.slice(0, 6).map((s, idx) => renderCard(s, idx))}
+                          </div>
+                        </>
+                      )}
+                      {completadas.length > 0 && (
+                        <>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+                            <span style={{ fontSize:11, fontWeight:700, color:T.secondary, textTransform:'uppercase', letterSpacing:'.1em' }}>✅ Entregadas</span>
+                            <span style={{ fontSize:11, padding:'1px 8px', borderRadius:99, background:'rgba(65,229,117,0.1)', color:T.secondary, fontWeight:700 }}>{completadas.length}</span>
+                          </div>
+                          <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 12 : 20 }}>
+                            {completadas.slice(0, 6).map((s, idx) => renderCard(s, activas.length + idx, true))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )
+                })()}
             </section>
           </div>
         </main>

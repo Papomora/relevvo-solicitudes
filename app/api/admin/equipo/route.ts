@@ -21,12 +21,15 @@ export async function POST(req: NextRequest) {
   if (!session || role !== 'admin')
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { nombre, phone } = await req.json()
+  const { nombre, phone, password } = await req.json()
   if (!nombre?.trim())
     return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
 
+  // Auto-generate password if not provided: first4chars + "2026"
+  const autoPass = password?.trim() || (nombre.trim().slice(0,4).charAt(0).toUpperCase() + nombre.trim().slice(1,4).toLowerCase() + '2026')
+
   const integrante = await prisma.integrante.create({
-    data: { nombre: nombre.trim(), phone: phone?.trim() || null },
+    data: { nombre: nombre.trim(), phone: phone?.trim() || null, password: autoPass },
   })
 
   // Welcome message via WA

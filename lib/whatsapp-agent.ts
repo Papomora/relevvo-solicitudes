@@ -56,23 +56,223 @@ export async function handleIncomingMessage(
     session = { ...session, historial: [] as HistEntry[], ...(isMultiCuenta && { cliente: '' }) }
   }
 
+  // ── Superusuario Admin: comandos globales ─────────────────────
+  if (cwa.nombre === 'Admin') {
+    const lowerText = text.toLowerCase().trim()
+    const mentionaEquipo = /equipo|andreina|angélica|angelica|integrante|compañero|todos/.test(lowerText)
+    const esNotificacion = /env[íi]a|env[íi]ales|d[íi]les|notif[íi]ca|avisa|manda|mándales|recuérda|recordar|reunión|reunion|junta|meeting/.test(lowerText)
+    const esConsultaCliente = cuentas.some(c => lowerText.includes(c.toLowerCase()))
+    const esSoloSaludo = /^(hola|hi|hey|buenos|buenas)[\s!¡.]*$/.test(lowerText)
+
+    // ── Detección de reporte de tarea completada ──────────────
+    // Ej: "aprobamos la parrilla de Molicie", "revisé 3 piezas de Crusso", "subí los videos"
+    const esTareaCompletada = /\b(revis[éa]|aprob[éa]|complet[éa]|termin[éa]|hic[ei]|envi[éa]|public[qué]|sub[ií]|editamos|grabamos|entregamos|enviamos|enviamos|publicamos|terminamos|completamos|aprobamos|revisamos|finalizamos|listo|listas|listos)\b/.test(lowerText)
+
+    // Guard: si el mensaje es un broadcast al equipo, NO tratar como tarea completada
+    // Ej: "Envía mensaje al equipo de qué tareas tienen pendientes" → broadcast, no completado
+    if (esTareaCompletada && !(mentionaEquipo && esNotificacion)) {
+      // Identify client mentioned (optional)
+      const clienteMencionado = cuentas.find(c => lowerText.includes(c.toLowerCase())) ?? null
+      // Log the action in seguimiento by finding current semana and marking relevant task
+      const semActual = await prisma.seguimientoSemana.findFirst({ orderBy: { semana: 'desc' } })
+      let confirmExtra = ''
+      if (semActual) {
+        const tareas = semActual.tareas as any
+        const dirTareas = tareas?.director ?? {}
+        // Try to auto-match task keywords
+        const TASK_KEYWORDS: Record<string, {freq:string; idx:number; hint:string}> = {
+          'parrilla':   { freq:'semanal',   idx:0, hint:'Parrilla CM revisada' },
+          'piezas':     { freq:'diario',    idx:0, hint:'Piezas revisadas y aprobadas' },
+          'video':      { freq:'diario',    idx:0, hint:'Videos aprobados' },
+          'reporte':    { freq:'semanal',   idx:2, hint:'Reporte registrado' },
+          'reunión':    { freq:'semanal',   idx:2, hint:'Reunión con cliente anotada' },
+          'reunion':    { freq:'semanal',   idx:2, hint:'Reunión con cliente anotada' },
+          'campaña':    { freq:'semanal',   idx:2, hint:'Campaña revisada' },
+          'contenido':  { freq:'diario',    idx:1, hint:'Contenido aprobado' },
+        }
+        for (const [kw, info] of Object.entries(TASK_KEYWORDS)) {
+          if (lowerText.includes(kw)) {
+            const arr = [...(dirTareas[info.freq] ?? [false,false,false])]
+            if (!arr[info.idx]) {
+              arr[info.idx] = true
+              const updated = { ...tareas, director: { ...dirTareas, [info.freq]: arr } }
+              await prisma.seguimientoSemana.update({ where:{id:semActual.id}, data:{tareas:updated} }).catch(()=>{})
+              confirmExtra = `\n✅ *Tarea actualizada en el dashboard:* ${info.hint}`
+            }
+            break
+          }
+        }
+      }
+      // Human, direct response
+      const clienteStr = clienteMencionado ? ` de *${clienteMencionado}*` : ''
+      const respuestas = [
+        `✅ Perfecto${clienteStr} — anotado en el seguimiento. ¡Bien hecho!${confirmExtra}`,
+        `✅ Listo${clienteStr} — queda registrado en el dashboard.${confirmExtra}`,
+        `💪 Excelente${clienteStr} — marcado en el seguimiento semanal.${confirmExtra}`,
+      ]
+      const respuesta = respuestas[Math.floor(Math.random() * respuestas.length)]
+      await prisma.waSession.update({ where:{phone}, data:{ultimoMensaje:now} })
+      await sendWA(phone, respuesta)
+      return
+    }
+
+    // 1. Notificación al equipo — detecta "envíales", "diles al equipo", "reúne al equipo"
+    if ((mentionaEquipo && esNotificacion) || (esNotificacion && !esConsultaCliente)) {
+      // Extraer el mensaje a enviar — quita los verbos de comando
+      const msgParaEquipo = text
+        .replace(/^(env[íi]a(les)?|d[íi]les?|notif[íi]ca(les)?|avisa(les)?|manda(les)?|mándales?)\s+(al\s+)?(equipo\s+)?/i, '')
+        .replace(/\s*(al equipo|a todos|a ellos)\s*\.?\s*$/i, '')
+        .trim() || text
+
+      // Enviar a todos los integrantes con teléfono
+      const integrantes = await prisma.integrante.findMany({ where: { phone: { not: null } } })
+      const enviados: string[] = []
+      for (const m of integrantes) {
+        if (!m.phone) continue
+        const cleanPhone = m.phone.replace(/\s/g, '').replace(/^(?!\+)/, '+')
+        try {
+          await sendWA(cleanPhone, `📌 *Relevvo — mensaje del director*\n\n${msgParaEquipo}`)
+          enviados.push(m.nombre)
+        } catch { /* swallow */ }
+      }
+
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone,
+        `✅ *Mensaje enviado al equipo*\n\n"${msgParaEquipo}"\n\n` +
+        `📲 Recibieron: ${enviados.join(', ')}`
+      )
+      return
+    }
+
+    // 2. Comandos de gestión de solicitudes ─────────────────────
+    // "completar 41" / "completado 41" / "listo 41"
+    const matchCompletar = lowerText.match(/^(completar?|completado|listo|done|terminar?)\s+(?:rel-?)?(\d+)/i)
+    if (matchCompletar) {
+      const id = parseInt(matchCompletar[2])
+      const sol = await prisma.solicitud.findUnique({ where: { id }, select: { id:true, cliente:true, tipo:true } })
+      if (!sol) { await sendWA(phone, `❌ No encontré la solicitud #REL-${id}.`); return }
+      await prisma.solicitud.update({ where: { id }, data: { estado: 'completado' } })
+      // Notify client
+      const cwaCliente = await prisma.clienteWA.findFirst({ where: { nombre: sol.cliente, activo: true } })
+      if (cwaCliente) await sendWA(cwaCliente.phone, `✅ Tu solicitud #REL-${id} (${sol.tipo}) ha sido completada. ¡Gracias por confiar en Relevvo! 💜`)
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone, `✅ *#REL-${id}* marcada como completada.\n👤 *${sol.cliente}* fue notificado.`)
+      return
+    }
+
+    // "en proceso 41" / "proceso 41"
+    const matchProceso = lowerText.match(/^(en\s+)?proceso\s+(?:rel-?)?(\d+)/i)
+    if (matchProceso) {
+      const id = parseInt(matchProceso[2])
+      const sol = await prisma.solicitud.findUnique({ where: { id }, select: { id:true, cliente:true, tipo:true } })
+      if (!sol) { await sendWA(phone, `❌ No encontré la solicitud #REL-${id}.`); return }
+      await prisma.solicitud.update({ where: { id }, data: { estado: 'en_proceso' } })
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone, `🔄 *#REL-${id}* (${sol.cliente}) → *En proceso*`)
+      return
+    }
+
+    // "revisión 41" / "revision 41" / "revisar 41"
+    const matchRevision = lowerText.match(/^revis[íi]?[oó]?n?\s+(?:rel-?)?(\d+)/i)
+    if (matchRevision) {
+      const id = parseInt(matchRevision[1])
+      const sol = await prisma.solicitud.findUnique({ where: { id }, select: { id:true, cliente:true, tipo:true } })
+      if (!sol) { await sendWA(phone, `❌ No encontré la solicitud #REL-${id}.`); return }
+      await prisma.solicitud.update({ where: { id }, data: { estado: 'revision' } })
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone, `👀 *#REL-${id}* (${sol.cliente}) → *En revisión*`)
+      return
+    }
+
+    // "ver 41" / "detalle 41" / "info 41"
+    const matchVer = lowerText.match(/^(ver|detalle|info|consultar?)\s+(?:rel-?)?(\d+)/i)
+    if (matchVer) {
+      const id = parseInt(matchVer[2])
+      const sol = await prisma.solicitud.findUnique({ where: { id } })
+      if (!sol) { await sendWA(phone, `❌ No encontré #REL-${id}.`); return }
+      const urgMap: Record<string,string> = { alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja' }
+      const estadoMap: Record<string,string> = { pendiente:'⏳ Pendiente', en_proceso:'🔄 En proceso', revision:'👀 En revisión', completado:'✅ Completado', cancelado:'❌ Cancelado' }
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone,
+        `📋 *#REL-${id}*\n` +
+        `👤 Cliente: *${sol.cliente}*\n` +
+        `📌 Tipo: ${sol.tipo}\n` +
+        `⚡ Urgencia: ${urgMap[sol.urgencia]??sol.urgencia}\n` +
+        `📊 Estado: ${estadoMap[sol.estado]??sol.estado}\n` +
+        `📝 "${sol.descripcion?.slice(0,120)}${(sol.descripcion?.length??0)>120?'...':''}"`
+      )
+      return
+    }
+
+    // "asignar 41 a Andreina" / "asigna 41 Andreina"
+    const matchAsignar = lowerText.match(/^asigna[r]?\s+(?:rel-?)?(\d+)\s+(?:a\s+)?(.+)/i)
+    if (matchAsignar) {
+      const id = parseInt(matchAsignar[1])
+      const asignado = matchAsignar[2].trim()
+      const sol = await prisma.solicitud.findUnique({ where: { id }, select: { id:true, cliente:true } })
+      if (!sol) { await sendWA(phone, `❌ No encontré #REL-${id}.`); return }
+      await prisma.solicitud.update({ where: { id }, data: { asignado } })
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone, `👉 *#REL-${id}* (${sol.cliente}) asignada a *${asignado}*`)
+      return
+    }
+
+    // "ayuda" → mostrar comandos disponibles
+    if (/^(ayuda|help|comandos|qué puedo|que puedo)/.test(lowerText)) {
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      await sendWA(phone,
+        `🤖 *Comandos Admin — Relevvo*\n\n` +
+        `📊 *estado* — Ver solicitudes activas\n` +
+        `👁️ *ver [ID]* — Detalle de solicitud\n` +
+        `✅ *completar [ID]* — Marcar completada\n` +
+        `🔄 *proceso [ID]* — Marcar en proceso\n` +
+        `👀 *revisión [ID]* — Marcar en revisión\n` +
+        `👉 *asignar [ID] a [nombre]* — Asignar\n` +
+        `📢 *envíales [mensaje]* — Broadcast al equipo\n\n` +
+        `_O escribe el nombre de un cliente para gestionar sus solicitudes._`
+      )
+      return
+    }
+
+    // 2b. Resumen de solicitudes — solo cuando es un saludo simple o comando explícito
+    const esSummaryCmd = esSoloSaludo || /^(estado|resumen|pendientes|que hay|qué hay|solicitudes|menu|menú)/.test(lowerText)
+    if (esSummaryCmd && !esConsultaCliente) {
+      const pendientes = await prisma.solicitud.findMany({
+        where: { archivado: false, estado: { not: 'completado' } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, cliente: true, tipo: true, urgencia: true, estado: true },
+      })
+      await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
+      if (pendientes.length === 0) {
+        await sendWA(phone, `✅ *Panel Admin*\n\nNo hay solicitudes activas. ¡Todo al día! 🎉\n\nEscribe el nombre de un cliente para gestionar sus solicitudes.`)
+        return
+      }
+      const urgMap: Record<string,string> = { alta:'🔴', media:'🟡', baja:'🟢' }
+      const estadoMap: Record<string,string> = { pendiente:'⏳', en_proceso:'🔄', revision:'👀', completado:'✅', cancelado:'❌' }
+      const lineas = pendientes.map(s => `${urgMap[s.urgencia]??'⚪'} #REL-${s.id} *${s.cliente}* — ${s.tipo} ${estadoMap[s.estado]??''}`)
+      await sendWA(phone,
+        `📊 *Panel Admin — ${pendientes.length} solicitudes activas*\n\n${lineas.join('\n')}\n\n` +
+        `_Escribe el nombre de un cliente para gestionar. O "envíales [mensaje]" para notificar al equipo._`
+      )
+      return
+    }
+  }
+
   // 3. Multi-account: account selection flow
   if (isMultiCuenta) {
     const lowerText = text.toLowerCase().trim()
     const switchCmd = lowerText.startsWith('cambiar') || lowerText.startsWith('cuenta:')
     if (!session.cliente || switchCmd) {
-      // Try to match one of the allowed accounts from the message
       const matched = cuentas.find(c => lowerText.includes(c.toLowerCase()))
       if (matched) {
         await prisma.waSession.update({ where: { phone }, data: { cliente: matched, historial: [], ultimoMensaje: now } })
         await sendWA(phone, `✅ Listo — gestionando *${matched}*.\n¿Qué necesitas?`)
         return
       }
-      // No match — show their accounts
       const lista = cuentas.map((c, i) => `${i + 1}. ${c}`).join('\n')
       await prisma.waSession.update({ where: { phone }, data: { ultimoMensaje: now } })
-      const saludo = cwa.nombre === 'Admin' ? 'Admin' : 'hola'
-      await sendWA(phone, `👋 ¡${saludo}! ¿Para cuál cuenta es esta solicitud?\n\n${lista}\n\nResponde el nombre de la cuenta.`)
+      await sendWA(phone, `👋 ¡Admin! ¿Para cuál cuenta es esta solicitud?\n\n${lista}\n\nResponde el nombre de la cuenta. O escribe *estado* para ver el resumen global.`)
       return
     }
   }
@@ -200,7 +400,7 @@ async function doCreate(
   })
   const urg  = a.urgencia === 'alta' ? '🔴 Alta' : a.urgencia === 'media' ? '🟡 Media' : '🟢 Baja'
   const asig = ASIGNACION[a.tipo] ?? 'Equipo'
-  notifyTeam({ id: nueva.id, cliente, tipo: a.tipo, urgencia: a.urgencia, descripcion: a.descripcion, asignado: asig }).catch(() => {})
+  await notifyTeam({ id: nueva.id, cliente, tipo: a.tipo, urgencia: a.urgencia, descripcion: a.descripcion, asignado: asig }).catch(() => {})
 
   const usadas = limiteMes - restantes + 1
   let reply = `✅ Solicitud #REL-${nueva.id} creada — ${urg}\n📋 ${a.tipo} · 👉 ${asig}\nTe avisamos cuando esté lista 🚀`
@@ -263,9 +463,15 @@ URGENCIAS: alta · media · baja
 
 5. NUNCA menciones precios, contratos ni información interna del equipo.${isAdmin ? `
 
-══ MODO ADMIN ══
-Estás hablando con el equipo interno de Relevvo. Están gestionando al cliente ${cliente}.
-El admin puede escribir "cambiar cuenta" para cambiar de cliente.
+══ MODO ADMIN / DIRECTOR ══
+Estás hablando con Juan Camilo, director de Relevvo Studio. Contexto del cliente activo: ${cliente}.
+
+INTERPRETACIÓN INTELIGENTE DE MENSAJES:
+- Si dice "revisamos la parrilla de X", "aprobamos piezas de X", "subimos los videos", "enviamos el reporte" → está REPORTANDO una tarea completada. Confirma brevemente y de forma natural: "✅ Perfecto, queda anotado." NO preguntes nada más.
+- Si dice "necesito un post para X", "crea solicitud", "hay que diseñar" → quiere CREAR una solicitud formal.
+- Si menciona un cliente + acción de seguimiento (revisar, aprobar, publicar, enviar) → es un REPORTE, no una solicitud.
+- Habla de forma directa y humana, como un asistente que entiende el contexto del negocio.
+- Cuando nombre un cliente en contexto de tarea ya hecha, NO le preguntes "¿para cuál cuenta?".
 
 ACTUALIZAR ESTADO — cuando el equipo termina o avanza una tarea, usa este JSON:
 {"reply":"✅ #REL-47 marcada como completada. El cliente recibirá aviso.","action":{"type":"update","id":47,"campo":"estado","valor":"completado"}}
