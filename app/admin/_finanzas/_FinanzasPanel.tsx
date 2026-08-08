@@ -450,7 +450,12 @@ export default function FinanzasPanel() {
   // ── Generic Firestore save/delete helpers ──
   const save = useCallback(async (col: string, data: any) => {
     if (!user) return
-    await setDoc(doc(db, 'finanzas', ORG_ID, col, data.id), data)
+    // Firestore's setDoc() throws 'invalid-argument' if any field is the
+    // literal value `undefined` (e.g. an optional field like amountPaid or
+    // paidDate that hasn't been set yet) — strip those keys instead of
+    // sending them, which was silently blocking every save that hit this.
+    const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined))
+    await setDoc(doc(db, 'finanzas', ORG_ID, col, data.id), clean)
   }, [user])
   const remove = useCallback(async (col: string, id: string) => {
     if (!user) return
