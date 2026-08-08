@@ -111,62 +111,96 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // ── PDF generation ─────────────────────────────────────────────
+const fmtDate = (iso: string) => {
+  const [y, m, d] = iso.split('-')
+  return y && m && d ? `${d}/${m}/${y}` : iso
+}
+
+// Clean, text-only invoice document — used for Imprimir/Descargar PDF so the
+// output never contains live form controls (inputs, selects, date pickers).
+// The interactive editor (InvoiceModal) is a separate on-screen-only view.
 function buildInvoiceHtml(invoice: Invoice, settings: AppSettings): string {
+  const cur = settings.currency
+  const saldo = invoice.total - (invoice.amountPaid || 0)
   const rows = invoice.items.map(it => `
     <tr>
-      <td style="padding:8px;border-bottom:1px solid #eee;">${it.serviceName}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${it.quantity}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(it.unitPrice, settings.currency)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(it.total, settings.currency)}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #EEE8D5;font-size:12px;">${it.serviceName || '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #EEE8D5;font-size:12px;text-align:center;">${it.quantity}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #EEE8D5;font-size:12px;text-align:right;">${formatCurrency(it.unitPrice, cur)}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #EEE8D5;font-size:12px;text-align:right;font-weight:700;">${formatCurrency(it.total, cur)}</td>
     </tr>`).join('')
   return `
-  <div style="font-family:Helvetica,Arial,sans-serif;color:#1F2937;padding:40px;width:700px;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;">
+  <div style="font-family:Helvetica,Arial,sans-serif;color:#1F2937;padding:44px;width:700px;line-height:1.5;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
       <div>
-        ${settings.logoUrl ? `<img src="${settings.logoUrl}" style="max-width:120px;max-height:70px;object-fit:contain;margin-bottom:8px;" />` : ''}
-        <p style="font-size:16px;font-weight:800;margin:0;">${settings.companyName || 'Relevvo Studio'}</p>
-        <p style="font-size:11px;color:#6B7280;margin:2px 0;">NIT: ${settings.companyNit || '-'}</p>
-        <p style="font-size:11px;color:#6B7280;margin:2px 0;">${settings.companyAddress || ''}</p>
-        <p style="font-size:11px;color:#6B7280;margin:2px 0;">${settings.companyEmail || ''} · ${settings.companyPhone || ''}</p>
+        ${settings.logoUrl ? `<img src="${settings.logoUrl}" style="max-width:140px;max-height:70px;object-fit:contain;margin-bottom:12px;display:block;" />` : ''}
+        <h1 style="font-size:24px;font-weight:900;margin:4px 0 2px;letter-spacing:-0.02em;">CUENTA DE COBRO</h1>
+        <p style="font-size:12px;color:#6B7280;margin:0;">No. ${invoice.number}</p>
       </div>
       <div style="text-align:right;">
-        <p style="font-size:20px;font-weight:900;color:#7C3AED;margin:0;">FACTURA</p>
-        <p style="font-size:13px;font-weight:700;margin:4px 0;">${invoice.number}</p>
-        <p style="font-size:11px;color:#6B7280;margin:2px 0;">Fecha: ${invoice.date}</p>
-        <p style="font-size:11px;color:#6B7280;margin:2px 0;">Vence: ${invoice.dueDate}</p>
+        <p style="font-size:15px;font-weight:800;margin:0;">${settings.companyName || 'Relevvo Studio'}</p>
+        <p style="font-size:11px;color:#6B7280;margin:3px 0;">NIT: ${settings.companyNit || '-'}</p>
+        <p style="font-size:11px;color:#6B7280;margin:3px 0;">${settings.companyAddress || ''}</p>
+        <p style="font-size:11px;color:#6B7280;margin:3px 0;">${settings.companyPhone || ''}${settings.companyEmail ? ' · ' + settings.companyEmail : ''}</p>
       </div>
     </div>
 
-    <div style="background:#FFF9EC;border-radius:10px;padding:14px 18px;margin-bottom:24px;">
-      <p style="font-size:10px;color:#78716C;text-transform:uppercase;margin:0 0 4px;">Facturar a</p>
-      <p style="font-size:13px;font-weight:700;margin:0;">${invoice.clientName}</p>
-      <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">NIT: ${invoice.clientNit || '-'}</p>
+    <hr style="border:none;border-top:1.5px solid #1F2937;margin-bottom:22px;" />
+
+    <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:26px;flex-wrap:wrap;">
+      <div style="background:#FFF9EC;border-radius:10px;padding:14px 18px;min-width:240px;">
+        <p style="font-size:10px;color:#78716C;text-transform:uppercase;letter-spacing:.04em;margin:0 0 5px;">Cliente</p>
+        <p style="font-size:14px;font-weight:800;margin:0;">${invoice.clientName}</p>
+        <p style="font-size:11px;color:#6B7280;margin:3px 0 0;">NIT: ${invoice.clientNit || '-'}</p>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#374151;">
+        <p style="margin:5px 0;">Fecha de Emisión: <b>${fmtDate(invoice.date)}</b></p>
+        <p style="margin:5px 0;">Fecha de Vencimiento: <b>${fmtDate(invoice.dueDate)}</b></p>
+      </div>
     </div>
 
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
       <thead>
         <tr style="background:#F0E6C8;">
-          <th style="padding:8px;text-align:left;font-size:11px;">Servicio</th>
-          <th style="padding:8px;text-align:center;font-size:11px;">Cant.</th>
-          <th style="padding:8px;text-align:right;font-size:11px;">Precio</th>
-          <th style="padding:8px;text-align:right;font-size:11px;">Total</th>
+          <th style="padding:9px 8px;text-align:left;font-size:11px;font-weight:800;">Descripción</th>
+          <th style="padding:9px 8px;text-align:center;font-size:11px;font-weight:800;width:60px;">Cant.</th>
+          <th style="padding:9px 8px;text-align:right;font-size:11px;font-weight:800;width:110px;">Precio Unit.</th>
+          <th style="padding:9px 8px;text-align:right;font-size:11px;font-weight:800;width:110px;">Total</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
 
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
-      <div style="width:240px;">
-        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;"><span>Subtotal</span><span>${formatCurrency(invoice.subtotal, settings.currency)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;"><span>Impuesto (${invoice.tax}%)</span><span>${formatCurrency(invoice.taxAmount, settings.currency)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:900;padding:8px 0;border-top:2px solid #1F2937;margin-top:4px;"><span>Total</span><span>${formatCurrency(invoice.total, settings.currency)}</span></div>
+    <div style="display:flex;justify-content:flex-end;margin:18px 0 24px;">
+      <div style="width:260px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:#374151;"><span>Subtotal</span><span>${formatCurrency(invoice.subtotal, cur)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:#374151;"><span>IVA (${invoice.tax}%)</span><span>${formatCurrency(invoice.taxAmount, cur)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:900;padding:9px 0;border-top:2px solid #1F2937;margin-top:4px;"><span>Total</span><span>${formatCurrency(invoice.total, cur)}</span></div>
+        <div style="background:#FFF9EC;border-radius:10px;padding:12px 14px;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#374151;margin-bottom:5px;"><span>Abonado</span><span>${formatCurrency(invoice.amountPaid || 0, cur)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;color:${saldo > 0 ? '#DC2626' : '#16A34A'};"><span>Saldo Pendiente</span><span>${formatCurrency(saldo, cur)}</span></div>
+        </div>
       </div>
     </div>
 
-    <p style="font-size:10px;color:#78716C;font-style:italic;margin-bottom:20px;">${numberToSpanishWords(invoice.total)}</p>
+    <p style="font-size:10.5px;color:#78716C;font-style:italic;text-transform:uppercase;margin-bottom:22px;">Son: ${numberToSpanishWords(invoice.total)}</p>
 
-    ${invoice.notes ? `<p style="font-size:11px;color:#6B7280;margin-bottom:16px;"><b>Notas:</b> ${invoice.notes}</p>` : ''}
-    ${settings.bankDetails ? `<p style="font-size:11px;color:#6B7280;"><b>Datos de pago:</b> ${settings.bankDetails}</p>` : ''}
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;">
+      ${settings.bankDetails ? `
+      <div style="flex:1;min-width:220px;">
+        <p style="font-size:12px;font-weight:800;margin:0 0 4px;">Datos Bancarios</p>
+        <p style="font-size:11px;color:#6B7280;margin:0;">${settings.bankDetails}</p>
+      </div>` : ''}
+      ${invoice.notes ? `
+      <div style="flex:1;min-width:220px;">
+        <p style="font-size:12px;font-weight:800;margin:0 0 4px;">Notas</p>
+        <p style="font-size:11px;color:#6B7280;margin:0;">${invoice.notes}</p>
+      </div>` : ''}
+    </div>
+
+    ${invoice.isRecurring ? `<p style="display:inline-block;background:#FFF9EC;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;margin-bottom:14px;">↻ Factura Recurrente Mensual</p>` : ''}
+
+    <p style="font-size:10px;color:#9CA3AF;text-align:center;margin-top:20px;">Documento generado electrónicamente por Relevvo Studio</p>
   </div>`
 }
 
@@ -896,22 +930,23 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
     }
   }
 
+  // Imprimir/Descargar render a clean text-only document (buildInvoiceHtml),
+  // never the live editable DOM — otherwise the output shows raw <input>/
+  // <select> form controls instead of readable text.
   const handlePrint = () => {
-    if (!previewRef.current) return
+    const inv = buildInvoice()
+    if (!inv) { alert('Selecciona un cliente antes de imprimir.'); return }
     const w = window.open('', '_blank', 'width=850,height=1100')
     if (!w) return
-    w.document.write(`<html><head><title>${number}</title></head><body>${previewRef.current.innerHTML}</body></html>`)
+    w.document.write(`<html><head><title>${number}</title></head><body>${buildInvoiceHtml(inv, settings)}</body></html>`)
     w.document.close()
     w.onload = () => { w.print() }
   }
 
-  const handleDownload = async () => {
-    if (!previewRef.current) return
-    const html2pdf = (await import('html2pdf.js')).default
-    await html2pdf().from(previewRef.current).set({
-      margin: 0, filename: `${number}.pdf`,
-      html2canvas: { scale: 2 }, jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
-    }).save()
+  const handleDownload = () => {
+    const inv = buildInvoice()
+    if (!inv) { alert('Selecciona un cliente antes de descargar el PDF.'); return }
+    downloadInvoicePdf(inv, settings)
   }
 
   return (
