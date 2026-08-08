@@ -1154,14 +1154,19 @@ function InvoiceModal({ invoice, clients, services, settings, onClose, onSave }:
               {items.map(it => (
                 <tr key={it.id}>
                   <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>
-                    <select style={{ ...inputStyle, marginBottom: 4 }} value={it.serviceName} onChange={e => {
+                    <select style={{ ...inputStyle, marginBottom: 4, fontSize: 11, color: '#6B7280' }} value="" onChange={e => {
+                      if (!e.target.value) return
                       const svc = services.find(s => s.name === e.target.value)
                       updateItem(it.id, { serviceName: e.target.value, unitPrice: svc?.price ?? it.unitPrice })
                     }}>
-                      <option value="">Seleccionar del catálogo…</option>
+                      <option value="">Elegir del catálogo (opcional)…</option>
                       {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
-                    {it.serviceName && <p style={{ fontSize: 12, margin: 0 }}>{it.serviceName}</p>}
+                    <input
+                      type="text" value={it.serviceName} placeholder="Descripción del ítem…"
+                      onChange={e => updateItem(it.id, { serviceName: e.target.value })}
+                      style={{ width: '100%', fontSize: 13, fontWeight: 600, border: '1px solid #E5E7EB', borderRadius: 6, padding: '5px 8px', boxSizing: 'border-box' }}
+                    />
                   </td>
                   <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'center' }}>
                     <input type="number" value={it.quantity} onChange={e => updateItem(it.id, { quantity: Number(e.target.value) })}
